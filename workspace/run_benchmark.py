@@ -36,22 +36,22 @@ GPU_CSV = 'gpu_utilization.csv'
 
 RCLONE_OPTIONS = {
     # Cache settings
-    'vfs_cache_mode': 'minimal',        # off, minimal, writes, full
+    'vfs_cache_mode': 'full',        # off, minimal, writes, full
     'vfs_cache_max_size': '20G',     # e.g., 5G, 10G, 20G, 50G
     'vfs_cache_max_age': '5h',       # e.g., 1h, 24h
     
     # Read performance
     'vfs_read_chunk_size': '256M',    # e.g., 16M, 64M, 128M, 256M
     'vfs_read_chunk_size_limit': 'off',  # e.g., 256M, 512M, off (unlimited)
-    'vfs_read_ahead': '1G',        # e.g., 128M, 256M, 512M, 1G
-    'buffer_size': '256M',           # e.g., 16M, 64M, 128M, 256M
+    'vfs_read_ahead': '2G',        # e.g., 128M, 256M, 512M, 1G
+    'buffer_size': '512M',           # e.g., 16M, 64M, 128M, 256M
     
     # Parallelism
-    'transfers': '16',               # e.g., 4, 8, 16, 32
-    'checkers': '8',                 # e.g., 4, 8, 16
+    'transfers': '32',               # e.g., 4, 8, 16, 32
+    'checkers': '16',                 # e.g., 4, 8, 16
     
     # Directory caching
-    'dir_cache_time': '30m',         # e.g., 5m, 30m, 1h
+    'dir_cache_time': '1h',         # e.g., 5m, 30m, 1h
     'attr_timeout': '30s',           # e.g., 1s, 10s, 30s, 1m
     
     # Stability/Retry settings
