@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+
+# Remember to run gpu_mointoring in a separate terminal while running this script:
 import os
 import subprocess
 import time
