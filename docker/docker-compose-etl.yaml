@@ -130,6 +130,11 @@ services:
         --progress \\
         --transfers=32 \\
         --checkers=16 \\
+        --retries=5 \\
+        --retries-sleep=10s \\
+        --low-level-retries=10 \\
+        --timeout=120s \\
+        --contimeout=60s \\
         --multi-thread-streams=4 \\
         --fast-list
 
