@@ -57,46 +57,106 @@ def clean_gpu_data(df_gpu):
         print("WARNING: No 'gpu_util_percent' column found in GPU data")
         return df_gpu.copy()
 
-def calculate_gpu_metrics(df_gpu_clean):
-    if df_gpu_clean.empty or 'run_id' not in df_gpu_clean.columns:
-        print("No GPU data available for metrics calculation")
+def calculate_gpu_metrics_by_timestamp(df_benchmark, df_gpu_clean):
+    if df_benchmark.empty or df_gpu_clean.empty:
+        print("No benchmark data or GPU data available for timestamp-based metrics calculation")
         return pd.DataFrame()
     
-    print(f"\nCalculating GPU metrics per run...")
+    print(f"\nCalculating GPU metrics using timestamp-based attribution...")
     
-    # Group by run_id and calculate aggregated metrics
-    gpu_metrics = df_gpu_clean.groupby('run_id').agg({
-        'gpu_util_percent': ['mean', 'max', 'std', 'min'],
-        'mem_used_mb': ['mean', 'max'],
-        'mem_total_mb': 'first',  # Should be constant
-        'temperature_c': ['mean', 'max'] if 'temperature_c' in df_gpu_clean.columns else ['mean', 'max'],
-        'timestamp': ['first', 'last', 'count']  # For tracking duration and sample count
-    }).round(2)
+    # Convert timestamps to datetime
+    df_benchmark = df_benchmark.copy()
+    df_gpu_clean = df_gpu_clean.copy()
     
-    # Flatten column names
-    gpu_metrics.columns = [f"gpu_{col[0]}_{col[1]}" if col[1] != 'first' else f"gpu_{col[0]}" 
-                          for col in gpu_metrics.columns]
+    df_benchmark['timestamp'] = pd.to_datetime(df_benchmark['timestamp'])
+    df_gpu_clean['timestamp'] = pd.to_datetime(df_gpu_clean['timestamp'])
     
-    # Rename columns for clarity
-    gpu_metrics = gpu_metrics.rename(columns={
-        'gpu_gpu_util_percent_mean': 'avg_gpu_utilization',
-        'gpu_gpu_util_percent_max': 'max_gpu_utilization', 
-        'gpu_gpu_util_percent_std': 'gpu_utilization_std',
-        'gpu_gpu_util_percent_min': 'min_gpu_utilization',
-        'gpu_mem_used_mb_mean': 'avg_memory_used_mb',
-        'gpu_mem_used_mb_max': 'max_memory_used_mb',
-        'gpu_mem_total_mb': 'total_memory_mb',
-        'gpu_timestamp_count': 'gpu_sample_count'
-    })
+    # Sort benchmark data by timestamp to get proper time ranges
+    df_benchmark = df_benchmark.sort_values('timestamp')
+    df_gpu_clean = df_gpu_clean.sort_values('timestamp')
     
-    # Calculate memory usage percentage
-    gpu_metrics['avg_memory_usage_percent'] = (gpu_metrics['avg_memory_used_mb'] / gpu_metrics['total_memory_mb'] * 100).round(2)
-    gpu_metrics['max_memory_usage_percent'] = (gpu_metrics['max_memory_used_mb'] / gpu_metrics['total_memory_mb'] * 100).round(2)
+    print(f"Benchmark runs timestamp range: {df_benchmark['timestamp'].min()} to {df_benchmark['timestamp'].max()}")
+    print(f"GPU data timestamp range: {df_gpu_clean['timestamp'].min()} to {df_gpu_clean['timestamp'].max()}")
     
-    # Reset index to make run_id a column
-    gpu_metrics = gpu_metrics.reset_index()
+    # Create list to store GPU metrics for each run
+    gpu_metrics_list = []
     
-    print(f"Calculated GPU metrics for {len(gpu_metrics)} runs")
+    for i, row in df_benchmark.iterrows():
+        run_id = row['run_id']
+        start_time = row['timestamp']
+        
+        # Find the end time for this run (start of next run or end of GPU data)
+        if i < len(df_benchmark) - 1:
+            # Use start of next run as end time
+            end_time = df_benchmark.iloc[i + 1]['timestamp']
+        else:
+            # For last run, use end of GPU data
+            end_time = df_gpu_clean['timestamp'].max()
+        
+        print(f"Run {run_id}: {start_time} to {end_time}")
+        
+        # Filter GPU data for this time range
+        gpu_run_data = df_gpu_clean[
+            (df_gpu_clean['timestamp'] >= start_time) & 
+            (df_gpu_clean['timestamp'] < end_time)
+        ]
+        
+        if len(gpu_run_data) == 0:
+            print(f"  WARNING: No GPU data found for run {run_id}")
+            # Add empty metrics for this run
+            gpu_metrics_list.append({
+                'run_id': run_id,
+                'avg_gpu_utilization': None,
+                'max_gpu_utilization': None,
+                'min_gpu_utilization': None,
+                'gpu_utilization_std': None,
+                'avg_memory_used_mb': None,
+                'max_memory_used_mb': None,
+                'total_memory_mb': None,
+                'avg_memory_usage_percent': None,
+                'max_memory_usage_percent': None,
+                'gpu_sample_count': 0
+            })
+            continue
+        
+        print(f"  Found {len(gpu_run_data)} GPU samples for run {run_id}")
+        
+        # Calculate metrics for this run
+        metrics = {
+            'run_id': run_id,
+            'avg_gpu_utilization': gpu_run_data['gpu_util_percent'].mean(),
+            'max_gpu_utilization': gpu_run_data['gpu_util_percent'].max(),
+            'min_gpu_utilization': gpu_run_data['gpu_util_percent'].min(),
+            'gpu_utilization_std': gpu_run_data['gpu_util_percent'].std(),
+            'avg_memory_used_mb': gpu_run_data['mem_used_mb'].mean(),
+            'max_memory_used_mb': gpu_run_data['mem_used_mb'].max(),
+            'total_memory_mb': gpu_run_data['mem_total_mb'].iloc[0] if len(gpu_run_data) > 0 else None,
+            'gpu_sample_count': len(gpu_run_data)
+        }
+        
+        # Calculate memory usage percentages
+        if metrics['total_memory_mb'] is not None and metrics['total_memory_mb'] > 0:
+            metrics['avg_memory_usage_percent'] = (metrics['avg_memory_used_mb'] / metrics['total_memory_mb'] * 100)
+            metrics['max_memory_usage_percent'] = (metrics['max_memory_used_mb'] / metrics['total_memory_mb'] * 100)
+        else:
+            metrics['avg_memory_usage_percent'] = None
+            metrics['max_memory_usage_percent'] = None
+        
+        # Add temperature if available
+        if 'temperature_c' in gpu_run_data.columns:
+            metrics['avg_temperature_c'] = gpu_run_data['temperature_c'].mean()
+            metrics['max_temperature_c'] = gpu_run_data['temperature_c'].max()
+        
+        gpu_metrics_list.append(metrics)
+    
+    # Convert to DataFrame
+    gpu_metrics = pd.DataFrame(gpu_metrics_list)
+    
+    # Round numerical columns
+    numeric_cols = gpu_metrics.select_dtypes(include=['float64', 'int64']).columns
+    gpu_metrics[numeric_cols] = gpu_metrics[numeric_cols].round(2)
+    
+    print(f"Calculated GPU metrics for {len(gpu_metrics)} runs using timestamp attribution")
     print(f"GPU metrics columns: {list(gpu_metrics.columns)}")
     
     return gpu_metrics
@@ -185,8 +245,8 @@ def main():
         # Clean GPU data
         df_gpu_clean = clean_gpu_data(df_gpu)
         
-        # Calculate GPU metrics
-        gpu_metrics = calculate_gpu_metrics(df_gpu_clean)
+        # Calculate GPU metrics using timestamp-based attribution
+        gpu_metrics = calculate_gpu_metrics_by_timestamp(df_benchmark, df_gpu_clean)
         
         # Merge data
         df_final = merge_data(df_benchmark, gpu_metrics)

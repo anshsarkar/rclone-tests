@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-
-# Remember to run gpu_mointoring in a separate terminal while running this script:
+# Remember to run gpu_monitoring in a separate terminal while running this script:
 import os
 import subprocess
 import time
@@ -19,59 +18,169 @@ from torchvision import models
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 import gc
 
-
-RUN_ID = "test_001"
-
 # rclone remote and container
 RCLONE_REMOTE = "rclone_s3"  
-# RCLONE_REMOTE = "chi_uc" 
-RCLONE_CONTAINER = "ansh-lab4-tests-bucket"  # Your container name
+RCLONE_CONTAINER = "ansh-lab4-tests-bucket"
 
 # Mount point - use user's home directory to avoid permission issues
 MOUNT_POINT = os.path.expanduser("~/rclone_mount")
 
 # File paths
-RESULTS_CSV = 'training_benchmark_results.csv'
+RESULTS_CSV = 'multiple_benchmark_results.csv'
 
-RCLONE_OPTIONS = {
-    # Cache settings
-    'vfs_cache_mode': 'full',        # off, minimal, writes, full
-    'vfs_cache_max_size': '20G',     # e.g., 5G, 10G, 20G, 50G
-    'vfs_cache_max_age': '5h',       # e.g., 1h, 24h
-    
-    # Read performance
-    'vfs_read_chunk_size': '256M',    # e.g., 16M, 64M, 128M, 256M
-    'vfs_read_chunk_size_limit': 'off',  # e.g., 256M, 512M, off (unlimited)
-    'vfs_read_ahead': '2G',        # e.g., 128M, 256M, 512M, 1G
-    'buffer_size': '512M',           # e.g., 16M, 64M, 128M, 256M
-    
-    # Parallelism
-    'transfers': '32',               # e.g., 4, 8, 16, 32
-    'checkers': '16',                 # e.g., 4, 8, 16
-    
-    # Directory caching
-    'dir_cache_time': '1h',         # e.g., 5m, 30m, 1h
-    'attr_timeout': '30s',           # e.g., 1s, 10s, 30s, 1m
-    
-    # Stability/Retry settings
-    'low_level_retries': '10',
-    'retries': '3',
-    'contimeout': '30s',
-    'timeout': '120s',
-}
+# Define multiple benchmark configurations to test
+BENCHMARK_CONFIGURATIONS = [
+    {
+        'run_id': 'rclone_minimal_workers4',
+        'description': 'Minimal rclone cache, 4 workers',
+        'rclone_options': {
+            'vfs_cache_mode': 'minimal',
+            'vfs_cache_max_size': '10G',
+            'vfs_cache_max_age': '2h',
+            'vfs_read_chunk_size': '128M',
+            'vfs_read_chunk_size_limit': 'off',
+            'vfs_read_ahead': '512M',
+            'buffer_size': '256M',
+            'transfers': '16',
+            'checkers': '8',
+            'dir_cache_time': '30m',
+            'attr_timeout': '30s',
+            'low_level_retries': '10',
+            'retries': '3',
+            'contimeout': '30s',
+            'timeout': '120s',
+        },
+        'dataloader_options': {
+            'batch_size': 64,
+            'num_workers': 4,
+            'prefetch_factor': 2,
+            'pin_memory': True,
+        },
+        'epochs': 5
+    },
+    {
+        'run_id': 'rclone_full_workers8',
+        'description': 'Full rclone cache, 8 workers',
+        'rclone_options': {
+            'vfs_cache_mode': 'full',
+            'vfs_cache_max_size': '20G',
+            'vfs_cache_max_age': '5h',
+            'vfs_read_chunk_size': '256M',
+            'vfs_read_chunk_size_limit': 'off',
+            'vfs_read_ahead': '2G',
+            'buffer_size': '512M',
+            'transfers': '32',
+            'checkers': '16',
+            'dir_cache_time': '1h',
+            'attr_timeout': '30s',
+            'low_level_retries': '10',
+            'retries': '3',
+            'contimeout': '30s',
+            'timeout': '120s',
+        },
+        'dataloader_options': {
+            'batch_size': 64,
+            'num_workers': 8,
+            'prefetch_factor': 4,
+            'pin_memory': True,
+        },
+        'epochs': 5
+    },
+    {
+        'run_id': 'rclone_aggressive_workers12',
+        'description': 'Aggressive rclone settings, 12 workers',
+        'rclone_options': {
+            'vfs_cache_mode': 'full',
+            'vfs_cache_max_size': '50G',
+            'vfs_cache_max_age': '8h',
+            'vfs_read_chunk_size': '512M',
+            'vfs_read_chunk_size_limit': 'off',
+            'vfs_read_ahead': '4G',
+            'buffer_size': '1G',
+            'transfers': '48',
+            'checkers': '24',
+            'dir_cache_time': '2h',
+            'attr_timeout': '60s',
+            'low_level_retries': '15',
+            'retries': '5',
+            'contimeout': '60s',
+            'timeout': '300s',
+        },
+        'dataloader_options': {
+            'batch_size': 64,
+            'num_workers': 12,
+            'prefetch_factor': 6,
+            'pin_memory': True,
+        },
+        'epochs': 5
+    },
+    {
+        'run_id': 'rclone_writes_batch128',
+        'description': 'Write cache mode, larger batch size',
+        'rclone_options': {
+            'vfs_cache_mode': 'writes',
+            'vfs_cache_max_size': '30G',
+            'vfs_cache_max_age': '6h',
+            'vfs_read_chunk_size': '256M',
+            'vfs_read_chunk_size_limit': 'off',
+            'vfs_read_ahead': '2G',
+            'buffer_size': '512M',
+            'transfers': '24',
+            'checkers': '12',
+            'dir_cache_time': '90m',
+            'attr_timeout': '45s',
+            'low_level_retries': '10',
+            'retries': '3',
+            'contimeout': '45s',
+            'timeout': '180s',
+        },
+        'dataloader_options': {
+            'batch_size': 128,
+            'num_workers': 8,
+            'prefetch_factor': 4,
+            'pin_memory': True,
+        },
+        'epochs': 5
+    },
+    {
+        'run_id': 'rclone_balanced_optimized',
+        'description': 'Balanced optimized configuration',
+        'rclone_options': {
+            'vfs_cache_mode': 'full',
+            'vfs_cache_max_size': '35G',
+            'vfs_cache_max_age': '6h',
+            'vfs_read_chunk_size': '384M',
+            'vfs_read_chunk_size_limit': 'off',
+            'vfs_read_ahead': '3G',
+            'buffer_size': '768M',
+            'transfers': '40',
+            'checkers': '20',
+            'dir_cache_time': '90m',
+            'attr_timeout': '45s',
+            'low_level_retries': '12',
+            'retries': '4',
+            'contimeout': '45s',
+            'timeout': '240s',
+        },
+        'dataloader_options': {
+            'batch_size': 96,
+            'num_workers': 10,
+            'prefetch_factor': 5,
+            'pin_memory': True,
+        },
+        'epochs': 5
+    }
+]
 
-DATALOADER_OPTIONS = {
-    'batch_size': 64,
-    'num_workers': 8,
-    # 'prefetch_factor': 4,
-    # 'pin_memory': True,
-}
-
-def setup_logging():
+def setup_logging(run_id):
     log_dir = "logs/benchmark_logs"
     os.makedirs(log_dir, exist_ok=True)
     
-    log_file = os.path.join(log_dir, f"{RUN_ID}.log")
+    log_file = os.path.join(log_dir, f"{run_id}.log")
+    
+    # Clear any existing handlers to avoid duplicate logs
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
     
     # Configure logging
     logging.basicConfig(
@@ -84,13 +193,12 @@ def setup_logging():
     )
     
     logger = logging.getLogger(__name__)
-    logger.info(f"Starting benchmark run: {RUN_ID}")
+    logger.info(f"Starting benchmark run: {run_id}")
     logger.info(f"Log file: {log_file}")
     
     return logger
 
 def cleanup_existing_processes(logger=None):
-    """Kill any existing rclone processes and unmount"""
     # Kill any existing rclone processes
     if logger:
         logger.info("Cleaning up existing rclone processes...")
@@ -458,21 +566,21 @@ def run_training_benchmark(data_dir, batch_size, num_workers, epochs=3,
     
     return results
 
-def save_results_to_csv(results, logger=None):
+def save_results_to_csv(results, rclone_options, logger=None):
     """Save results to CSV file"""
     results_file = RESULTS_CSV
     file_exists = os.path.exists(results_file)
     
     with open(results_file, 'a', newline='') as csvfile:
         fieldnames = [
-            'timestamp', 'run_id', 'total_training_time_sec', 'epochs', 
+            'timestamp', 'run_id', 'description', 'total_training_time_sec', 'epochs', 
             'final_training_loss', 'best_val_accuracy', 'final_val_accuracy', 'best_val_loss',
             'test_loss', 'test_accuracy', 'test_precision', 'test_recall', 'test_f1', 'test_inference_time_sec',
             'avg_epoch_time_sec', 'avg_data_loading_time_sec', 'avg_compute_time_sec', 
             'data_loading_ratio', 'samples_per_sec_training', 'total_samples_processed',
             'batch_size', 'num_workers', 'total_train_samples', 'total_val_samples', 'total_test_samples', 
             'trainable_parameters', 'vfs_cache_mode', 'vfs_cache_max_size', 'vfs_read_chunk_size', 
-            'buffer_size', 'transfers'
+            'buffer_size', 'transfers', 'prefetch_factor', 'pin_memory'
         ]
         
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -484,6 +592,7 @@ def save_results_to_csv(results, logger=None):
         row_data = {
             'timestamp': results['timestamp'],
             'run_id': results['run_id'],
+            'description': results.get('description', ''),
             'total_training_time_sec': results['total_training_time_sec'],
             'epochs': results['epochs'],
             'final_training_loss': results['final_training_loss'],
@@ -508,11 +617,13 @@ def save_results_to_csv(results, logger=None):
             'total_val_samples': results['total_val_samples'],
             'total_test_samples': results['total_test_samples'],
             'trainable_parameters': results['trainable_parameters'],
-            'vfs_cache_mode': RCLONE_OPTIONS.get('vfs_cache_mode', 'default'),
-            'vfs_cache_max_size': RCLONE_OPTIONS.get('vfs_cache_max_size', 'default'),
-            'vfs_read_chunk_size': RCLONE_OPTIONS.get('vfs_read_chunk_size', 'default'),
-            'buffer_size': RCLONE_OPTIONS.get('buffer_size', 'default'),
-            'transfers': RCLONE_OPTIONS.get('transfers', 'default'),
+            'vfs_cache_mode': rclone_options.get('vfs_cache_mode', 'default'),
+            'vfs_cache_max_size': rclone_options.get('vfs_cache_max_size', 'default'),
+            'vfs_read_chunk_size': rclone_options.get('vfs_read_chunk_size', 'default'),
+            'buffer_size': rclone_options.get('buffer_size', 'default'),
+            'transfers': rclone_options.get('transfers', 'default'),
+            'prefetch_factor': results.get('prefetch_factor', 'default'),
+            'pin_memory': results.get('pin_memory', 'default'),
         }
         
         writer.writerow(row_data)
@@ -520,26 +631,40 @@ def save_results_to_csv(results, logger=None):
     if logger:
         logger.info(f"Results appended to {results_file}")
 
-def main():
-    """Main function to run the complete benchmark"""
+def run_single_benchmark(config):
+    """Run a single benchmark configuration"""
+    run_id = config['run_id']
+    description = config['description']
+    rclone_options = config['rclone_options']
+    dataloader_options = config['dataloader_options']
+    epochs = config['epochs']
     
-    # Setup logging
-    logger = setup_logging()
+    # Setup logging for this specific run
+    logger = setup_logging(run_id)
     
     try:
         # Check device
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         logger.info(f"Using device: {device}")
         
+        logger.info("="*80)
+        logger.info(f"BENCHMARK CONFIGURATION: {run_id}")
+        logger.info(f"Description: {description}")
+        logger.info("="*80)
+        
         logger.info("Configuration:")
-        logger.info(f"  Run ID: {RUN_ID}")
+        logger.info(f"  Run ID: {run_id}")
         logger.info(f"  Remote: {RCLONE_REMOTE}:{RCLONE_CONTAINER}")
-        logger.info(f"  Cache Mode: {RCLONE_OPTIONS.get('vfs_cache_mode', 'default')}")
-        logger.info(f"  Batch Size: {DATALOADER_OPTIONS.get('batch_size', 64)}")
-        logger.info(f"  Num Workers: {DATALOADER_OPTIONS.get('num_workers', 8)}")
+        logger.info(f"  Cache Mode: {rclone_options.get('vfs_cache_mode', 'default')}")
+        logger.info(f"  Cache Size: {rclone_options.get('vfs_cache_max_size', 'default')}")
+        logger.info(f"  Batch Size: {dataloader_options.get('batch_size', 64)}")
+        logger.info(f"  Num Workers: {dataloader_options.get('num_workers', 8)}")
+        logger.info(f"  Prefetch Factor: {dataloader_options.get('prefetch_factor', 2)}")
+        logger.info(f"  Pin Memory: {dataloader_options.get('pin_memory', True)}")
+        logger.info(f"  Epochs: {epochs}")
         
         # Build mount command
-        mount_cmd = build_mount_command(RCLONE_REMOTE, RCLONE_CONTAINER, MOUNT_POINT, RCLONE_OPTIONS)
+        mount_cmd = build_mount_command(RCLONE_REMOTE, RCLONE_CONTAINER, MOUNT_POINT, rclone_options)
         logger.info("Mount command:")
         logger.info(mount_cmd)
         
@@ -552,7 +677,7 @@ def main():
             logger.info(f"Mount point created/verified: {MOUNT_POINT}")
         except Exception as e:
             logger.error(f"Failed to create mount point {MOUNT_POINT}: {e}")
-            return 1
+            return None
         
         # Mount with new configuration
         logger.info(f"Mounting {RCLONE_REMOTE}:{RCLONE_CONTAINER} to {MOUNT_POINT}...")
@@ -561,10 +686,10 @@ def main():
         if result.returncode != 0:
             logger.error(f"Mount failed!")
             logger.error(f"stderr: {result.stderr}")
-            return 1
+            return None
         else:
             # Wait for mount to be ready
-            time.sleep(3)
+            time.sleep(5)
             
             # Verify mount
             if os.path.exists(MOUNT_POINT) and os.listdir(MOUNT_POINT):
@@ -572,6 +697,7 @@ def main():
                 logger.info(f"Contents: {os.listdir(MOUNT_POINT)}")
             else:
                 logger.warning("Mount point exists but appears empty")
+                return None
         
         # Check data directory
         DATA_DIR = MOUNT_POINT
@@ -580,16 +706,19 @@ def main():
         
         # Run training benchmark
         logger.info("="*60)
-        logger.info(f"TRAINING BENCHMARK RUN: {RUN_ID}")
+        logger.info(f"TRAINING BENCHMARK RUN: {run_id}")
         logger.info("="*60)
+        
+        # Record timestamp before training starts
+        start_timestamp = datetime.now().isoformat()
         
         results = run_training_benchmark(
             data_dir=DATA_DIR,
-            batch_size=DATALOADER_OPTIONS.get('batch_size', 64),
-            num_workers=DATALOADER_OPTIONS.get('num_workers', 8),
-            epochs=10,  # Short benchmark run
-            prefetch_factor=DATALOADER_OPTIONS.get('prefetch_factor', 2),
-            pin_memory=DATALOADER_OPTIONS.get('pin_memory', False),
+            batch_size=dataloader_options.get('batch_size', 64),
+            num_workers=dataloader_options.get('num_workers', 8),
+            epochs=epochs,
+            prefetch_factor=dataloader_options.get('prefetch_factor', 2),
+            pin_memory=dataloader_options.get('pin_memory', True),
             use_gpu=True if device == 'cuda' else False,
             logger=logger
         )
@@ -614,17 +743,26 @@ def main():
         logger.info(f"  Number of workers: {results['num_workers']}")
         logger.info(f"  Trainable parameters: {results['trainable_parameters']:,}")
         
-        # Save detailed results
-        results['timestamp'] = datetime.now().isoformat()
-        results['run_id'] = RUN_ID
-        results['rclone_config'] = RCLONE_OPTIONS
+        # Add metadata to results
+        results['timestamp'] = start_timestamp
+        results['run_id'] = run_id
+        results['description'] = description
+        results['rclone_config'] = rclone_options
+        results['prefetch_factor'] = dataloader_options.get('prefetch_factor', 2)
+        results['pin_memory'] = dataloader_options.get('pin_memory', True)
         
-        save_results_to_csv(results, logger)
-        logger.info(f"Results saved with Run ID: {RUN_ID}")
+        save_results_to_csv(results, rclone_options, logger)
+        logger.info(f"Results saved with Run ID: {run_id}")
+        
+        logger.info("="*60)
+        logger.info(f"Benchmark {run_id} completed successfully!")
+        logger.info("="*60)
+        
+        return results
         
     except Exception as e:
-        logger.error(f"Benchmark failed with error: {e}")
-        return 1
+        logger.error(f"Benchmark {run_id} failed with error: {e}")
+        return None
     
     finally:
         # Cleanup - unmount and kill processes
@@ -644,11 +782,81 @@ def main():
             subprocess.run(f"sudo fusermount -uz {MOUNT_POINT}", shell=True, capture_output=True)
             logger.warning(f"Used force unmount")
         
-        logger.info("="*60)
-        logger.info("Benchmark completed!")
-        logger.info("="*60)
-    
-    return 0
+        # Wait between configurations
+        time.sleep(5)
 
-if __name__ == "__main__":
-    exit(main())
+def main():
+    """Main function to run multiple benchmark configurations"""
+    
+    print("="*80)
+    print("MULTIPLE BENCHMARK CONFIGURATIONS")
+    print("="*80)
+    print(f"Total configurations to run: {len(BENCHMARK_CONFIGURATIONS)}")
+    
+    results_summary = []
+    
+    for i, config in enumerate(BENCHMARK_CONFIGURATIONS, 1):
+        print(f"\n{'='*80}")
+        print(f"RUNNING CONFIGURATION {i}/{len(BENCHMARK_CONFIGURATIONS)}: {config['run_id']}")
+        print(f"Description: {config['description']}")
+        print(f"{'='*80}")
+        
+        result = run_single_benchmark(config)
+        
+        if result:
+            results_summary.append({
+                'run_id': config['run_id'],
+                'description': config['description'],
+                'success': True,
+                'throughput': result['samples_per_sec_training'],
+                'accuracy': result['test_accuracy'],
+                'data_loading_ratio': result['data_loading_ratio']
+            })
+            print(f"✅ Configuration {config['run_id']} completed successfully")
+        else:
+            results_summary.append({
+                'run_id': config['run_id'],
+                'description': config['description'],
+                'success': False,
+                'throughput': 0,
+                'accuracy': 0,
+                'data_loading_ratio': 0
+            })
+            print(f"❌ Configuration {config['run_id']} failed")
+        
+        # Wait between configurations
+        if i < len(BENCHMARK_CONFIGURATIONS):
+            print(f"Waiting 10 seconds before next configuration...")
+            time.sleep(10)
+    
+    # Print final summary
+    print("\n" + "="*80)
+    print("FINAL BENCHMARK SUMMARY")
+    print("="*80)
+    
+    successful_runs = [r for r in results_summary if r['success']]
+    
+    if successful_runs:
+        print(f"Successful runs: {len(successful_runs)}/{len(BENCHMARK_CONFIGURATIONS)}")
+        print("\nRanking by throughput (samples/sec):")
+        sorted_by_throughput = sorted(successful_runs, key=lambda x: x['throughput'], reverse=True)
+        
+        for i, result in enumerate(sorted_by_throughput, 1):
+            print(f"{i:2d}. {result['run_id']:25s} | {result['throughput']:8.1f} samples/sec | "
+                  f"Accuracy: {result['accuracy']:5.1f}% | Data ratio: {result['data_loading_ratio']:5.1%}")
+        
+        print(f"\nBest throughput: {sorted_by_throughput[0]['run_id']} with {sorted_by_throughput[0]['throughput']:.1f} samples/sec")
+        
+        # Find best accuracy
+        sorted_by_accuracy = sorted(successful_runs, key=lambda x: x['accuracy'], reverse=True)
+        print(f"Best accuracy: {sorted_by_accuracy[0]['run_id']} with {sorted_by_accuracy[0]['accuracy']:.1f}%")
+        
+    else:
+        print("❌ No successful runs!")
+    
+    print("="*80)
+    print("All benchmarks completed!")
+    print(f"Results saved to: {RESULTS_CSV}")
+    print("="*80)
+
+
