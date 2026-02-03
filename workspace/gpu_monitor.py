@@ -1,18 +1,6 @@
 #!/usr/bin/env python3
-"""
-GPU Utilization Monitor
 
-Run this script in a separate terminal to monitor GPU utilization
-while running benchmarks.
-
-Usage:
-    python gpu_monitor.py --output gpu_utilization.csv
-    python gpu_monitor.py --output gpu_utilization.csv --interval 0.5
-    python gpu_monitor.py --output gpu_utilization.csv --run-id test_001
-
-Press Ctrl+C to stop monitoring.
-"""
-
+# python gpu_monitor.py --output gpu_utilization.csv --run-id test_001
 import argparse
 import csv
 import subprocess

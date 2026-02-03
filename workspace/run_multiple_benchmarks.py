@@ -18,10 +18,6 @@ from torchvision import models
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 import gc
 
-# rclone remote and container
-RCLONE_REMOTE = "rclone_s3"  
-RCLONE_CONTAINER = "ansh-lab4-tests-bucket"
-
 # Mount point - use user's home directory to avoid permission issues
 MOUNT_POINT = os.path.expanduser("~/rclone_mount")
 
@@ -33,6 +29,8 @@ BENCHMARK_CONFIGURATIONS = [
     {
         'run_id': 'rclone_minimal_workers4',
         'description': 'Minimal rclone cache, 4 workers',
+        'rclone_remote': 'rclone_s3',
+        'rclone_container': 'ansh-lab4-tests-bucket',
         'rclone_options': {
             'vfs_cache_mode': 'minimal',
             'vfs_cache_max_size': '10G',
@@ -61,6 +59,8 @@ BENCHMARK_CONFIGURATIONS = [
     {
         'run_id': 'rclone_full_workers8',
         'description': 'Full rclone cache, 8 workers',
+        'rclone_remote': 'rclone_s3',
+        'rclone_container': 'ansh-lab4-tests-bucket',
         'rclone_options': {
             'vfs_cache_mode': 'full',
             'vfs_cache_max_size': '20G',
@@ -89,6 +89,8 @@ BENCHMARK_CONFIGURATIONS = [
     {
         'run_id': 'rclone_aggressive_workers12',
         'description': 'Aggressive rclone settings, 12 workers',
+        'rclone_remote': 'rclone_s3',
+        'rclone_container': 'ansh-lab4-tests-bucket',
         'rclone_options': {
             'vfs_cache_mode': 'full',
             'vfs_cache_max_size': '50G',
@@ -117,6 +119,8 @@ BENCHMARK_CONFIGURATIONS = [
     {
         'run_id': 'rclone_writes_batch128',
         'description': 'Write cache mode, larger batch size',
+        'rclone_remote': 'rclone_s3',
+        'rclone_container': 'ansh-lab4-tests-bucket',
         'rclone_options': {
             'vfs_cache_mode': 'writes',
             'vfs_cache_max_size': '30G',
@@ -145,6 +149,8 @@ BENCHMARK_CONFIGURATIONS = [
     {
         'run_id': 'rclone_balanced_optimized',
         'description': 'Balanced optimized configuration',
+        'rclone_remote': 'rclone_s3',
+        'rclone_container': 'ansh-lab4-tests-bucket',
         'rclone_options': {
             'vfs_cache_mode': 'full',
             'vfs_cache_max_size': '35G',
@@ -635,6 +641,8 @@ def run_single_benchmark(config):
     """Run a single benchmark configuration"""
     run_id = config['run_id']
     description = config['description']
+    rclone_remote = config['rclone_remote']
+    rclone_container = config['rclone_container']
     rclone_options = config['rclone_options']
     dataloader_options = config['dataloader_options']
     epochs = config['epochs']
@@ -654,7 +662,7 @@ def run_single_benchmark(config):
         
         logger.info("Configuration:")
         logger.info(f"  Run ID: {run_id}")
-        logger.info(f"  Remote: {RCLONE_REMOTE}:{RCLONE_CONTAINER}")
+        logger.info(f"  Remote: {rclone_remote}:{rclone_container}")
         logger.info(f"  Cache Mode: {rclone_options.get('vfs_cache_mode', 'default')}")
         logger.info(f"  Cache Size: {rclone_options.get('vfs_cache_max_size', 'default')}")
         logger.info(f"  Batch Size: {dataloader_options.get('batch_size', 64)}")
@@ -664,7 +672,7 @@ def run_single_benchmark(config):
         logger.info(f"  Epochs: {epochs}")
         
         # Build mount command
-        mount_cmd = build_mount_command(RCLONE_REMOTE, RCLONE_CONTAINER, MOUNT_POINT, rclone_options)
+        mount_cmd = build_mount_command(rclone_remote, rclone_container, MOUNT_POINT, rclone_options)
         logger.info("Mount command:")
         logger.info(mount_cmd)
         
@@ -680,7 +688,7 @@ def run_single_benchmark(config):
             return None
         
         # Mount with new configuration
-        logger.info(f"Mounting {RCLONE_REMOTE}:{RCLONE_CONTAINER} to {MOUNT_POINT}...")
+        logger.info(f"Mounting {rclone_remote}:{rclone_container} to {MOUNT_POINT}...")
         result = subprocess.run(mount_cmd, shell=True, capture_output=True, text=True)
         
         if result.returncode != 0:
