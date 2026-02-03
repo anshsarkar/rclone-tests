@@ -1,0 +1,124 @@
+2026-02-03 22:13:50,942 - INFO - Starting benchmark run: rclone_balanced_optimized
+2026-02-03 22:13:50,942 - INFO - Log file: logs/benchmark_logs/rclone_balanced_optimized.log
+2026-02-03 22:13:50,943 - INFO - Using device: cuda
+2026-02-03 22:13:50,943 - INFO - ================================================================================
+2026-02-03 22:13:50,943 - INFO - BENCHMARK CONFIGURATION: rclone_balanced_optimized
+2026-02-03 22:13:50,943 - INFO - Description: Balanced optimized configuration
+2026-02-03 22:13:50,943 - INFO - ================================================================================
+2026-02-03 22:13:50,943 - INFO - Configuration:
+2026-02-03 22:13:50,943 - INFO -   Run ID: rclone_balanced_optimized
+2026-02-03 22:13:50,943 - INFO -   Remote: rclone_s3:ansh-lab4-tests-bucket
+2026-02-03 22:13:50,943 - INFO -   Cache Mode: full
+2026-02-03 22:13:50,943 - INFO -   Cache Size: 35G
+2026-02-03 22:13:50,944 - INFO -   Batch Size: 64
+2026-02-03 22:13:50,944 - INFO -   Num Workers: 10
+2026-02-03 22:13:50,944 - INFO -   Prefetch Factor: 5
+2026-02-03 22:13:50,944 - INFO -   Pin Memory: True
+2026-02-03 22:13:50,944 - INFO -   Epochs: 5
+2026-02-03 22:13:50,944 - INFO - Mount command:
+2026-02-03 22:13:50,944 - INFO - rclone mount rclone_s3:ansh-lab4-tests-bucket /home/cc/rclone_mount --read-only --vfs-cache-mode full --vfs-cache-max-size 35G --vfs-cache-max-age 6h --vfs-read-chunk-size 384M --vfs-read-chunk-size-limit off --vfs-read-ahead 3G --buffer-size 768M --transfers 40 --checkers 20 --dir-cache-time 90m --attr-timeout 45s --low-level-retries 12 --retries 4 --contimeout 45s --timeout 240s --daemon
+2026-02-03 22:13:50,944 - INFO - Cleaning up existing rclone processes...
+2026-02-03 22:13:54,053 - INFO - Mount point created/verified: /home/cc/rclone_mount
+2026-02-03 22:13:54,054 - INFO - Mounting rclone_s3:ansh-lab4-tests-bucket to /home/cc/rclone_mount...
+2026-02-03 22:14:00,106 - INFO - Mounted successfully!
+2026-02-03 22:14:00,107 - INFO - Contents: ['evaluation', 'training', 'validation']
+2026-02-03 22:14:00,107 - INFO - Data directory: /home/cc/rclone_mount
+2026-02-03 22:14:00,107 - INFO - Contents: ['evaluation', 'training', 'validation']
+2026-02-03 22:14:00,107 - INFO - ============================================================
+2026-02-03 22:14:00,107 - INFO - TRAINING BENCHMARK RUN: rclone_balanced_optimized
+2026-02-03 22:14:00,108 - INFO - ============================================================
+2026-02-03 22:14:00,108 - INFO - Setting up training benchmark...
+2026-02-03 22:14:00,108 - INFO -   Batch size: 64
+2026-02-03 22:14:00,108 - INFO -   Num workers: 10
+2026-02-03 22:14:00,108 - INFO -   Prefetch factor: 5
+2026-02-03 22:14:00,108 - INFO -   Pin memory: True
+2026-02-03 22:14:00,108 - INFO -   Epochs: 5
+2026-02-03 22:14:00,108 - INFO -   Device: cuda
+2026-02-03 22:14:01,459 - INFO - Dataset sizes:
+2026-02-03 22:14:01,460 - INFO -   Training: 9866 images
+2026-02-03 22:14:01,460 - INFO -   Validation: 3430 images
+2026-02-03 22:14:01,460 - INFO -   Evaluation (test): 3347 images
+2026-02-03 22:14:01,460 - INFO -   Classes: 11
+2026-02-03 22:14:01,582 - INFO -   Trainable parameters: 14,091
+2026-02-03 22:14:01,582 - INFO - Starting training...
+2026-02-03 22:14:01,582 - INFO - Epoch 1/5
+2026-02-03 22:14:06,919 - INFO -   Batch   50: Loss=2.3320, Train Acc=15.06%, Data throughput=11647.3 samples/sec
+2026-02-03 22:14:11,526 - INFO -   Batch  100: Loss=2.2663, Train Acc=18.98%, Data throughput=11588.2 samples/sec
+2026-02-03 22:14:16,344 - INFO -   Batch  150: Loss=2.2160, Train Acc=22.41%, Data throughput=11638.5 samples/sec
+2026-02-03 22:14:22,172 - INFO -   Epoch 1 Results:
+2026-02-03 22:14:22,172 - INFO -     Training Loss: 2.2107, Training Accuracy: 22.62%
+2026-02-03 22:14:22,172 - INFO -     Validation Loss: 2.0477, Validation Accuracy: 37.81%
+2026-02-03 22:14:22,172 - INFO -     Epoch Time: 15.46s
+2026-02-03 22:14:22,172 - INFO -     Data Loading Time: 0.85s (5.5%)
+2026-02-03 22:14:22,172 - INFO -     Compute Time: 3.97s (25.7%)
+2026-02-03 22:14:22,172 - INFO -     Validation loss improved. Best model updated.
+2026-02-03 22:14:22,173 - INFO - Epoch 2/5
+2026-02-03 22:14:26,375 - INFO -   Batch   50: Loss=2.0157, Train Acc=35.03%, Data throughput=11853.0 samples/sec
+2026-02-03 22:14:30,546 - INFO -   Batch  100: Loss=1.9911, Train Acc=36.69%, Data throughput=11598.3 samples/sec
+2026-02-03 22:14:34,277 - INFO -   Batch  150: Loss=1.9516, Train Acc=38.95%, Data throughput=11637.6 samples/sec
+2026-02-03 22:14:38,569 - INFO -   Epoch 2 Results:
+2026-02-03 22:14:38,569 - INFO -     Training Loss: 1.9489, Training Accuracy: 39.02%
+2026-02-03 22:14:38,569 - INFO -     Validation Loss: 1.8386, Validation Accuracy: 47.99%
+2026-02-03 22:14:38,569 - INFO -     Epoch Time: 12.63s
+2026-02-03 22:14:38,569 - INFO -     Data Loading Time: 0.85s (6.7%)
+2026-02-03 22:14:38,569 - INFO -     Compute Time: 3.97s (31.4%)
+2026-02-03 22:14:38,569 - INFO -     Validation loss improved. Best model updated.
+2026-02-03 22:14:38,570 - INFO - Epoch 3/5
+2026-02-03 22:14:42,885 - INFO -   Batch   50: Loss=1.8265, Train Acc=44.47%, Data throughput=11818.3 samples/sec
+2026-02-03 22:14:46,449 - INFO -   Batch  100: Loss=1.7956, Train Acc=46.44%, Data throughput=11875.2 samples/sec
+2026-02-03 22:14:50,494 - INFO -   Batch  150: Loss=1.7735, Train Acc=47.43%, Data throughput=11894.2 samples/sec
+2026-02-03 22:14:54,363 - INFO -   Epoch 3 Results:
+2026-02-03 22:14:54,363 - INFO -     Training Loss: 1.7726, Training Accuracy: 47.45%
+2026-02-03 22:14:54,363 - INFO -     Validation Loss: 1.6714, Validation Accuracy: 59.27%
+2026-02-03 22:14:54,363 - INFO -     Epoch Time: 12.05s
+2026-02-03 22:14:54,363 - INFO -     Data Loading Time: 0.83s (6.9%)
+2026-02-03 22:14:54,363 - INFO -     Compute Time: 3.89s (32.3%)
+2026-02-03 22:14:54,363 - INFO -     Validation loss improved. Best model updated.
+2026-02-03 22:14:54,363 - INFO - Epoch 4/5
+2026-02-03 22:14:58,686 - INFO -   Batch   50: Loss=1.6858, Train Acc=50.69%, Data throughput=11556.0 samples/sec
+2026-02-03 22:15:02,896 - INFO -   Batch  100: Loss=1.6538, Train Acc=52.56%, Data throughput=11068.3 samples/sec
+2026-02-03 22:15:06,623 - INFO -   Batch  150: Loss=1.6378, Train Acc=53.16%, Data throughput=11379.2 samples/sec
+2026-02-03 22:15:10,539 - INFO -   Epoch 4 Results:
+2026-02-03 22:15:10,540 - INFO -     Training Loss: 1.6376, Training Accuracy: 53.16%
+2026-02-03 22:15:10,540 - INFO -     Validation Loss: 1.5408, Validation Accuracy: 61.11%
+2026-02-03 22:15:10,540 - INFO -     Epoch Time: 12.39s
+2026-02-03 22:15:10,540 - INFO -     Data Loading Time: 0.87s (7.0%)
+2026-02-03 22:15:10,540 - INFO -     Compute Time: 4.01s (32.4%)
+2026-02-03 22:15:10,540 - INFO -     Validation loss improved. Best model updated.
+2026-02-03 22:15:10,540 - INFO - Epoch 5/5
+2026-02-03 22:15:15,185 - INFO -   Batch   50: Loss=1.5667, Train Acc=55.56%, Data throughput=11792.4 samples/sec
+2026-02-03 22:15:19,167 - INFO -   Batch  100: Loss=1.5408, Train Acc=56.39%, Data throughput=11342.2 samples/sec
+2026-02-03 22:15:22,732 - INFO -   Batch  150: Loss=1.5317, Train Acc=56.55%, Data throughput=11344.5 samples/sec
+2026-02-03 22:15:26,773 - INFO -   Epoch 5 Results:
+2026-02-03 22:15:26,773 - INFO -     Training Loss: 1.5298, Training Accuracy: 56.66%
+2026-02-03 22:15:26,773 - INFO -     Validation Loss: 1.4434, Validation Accuracy: 64.37%
+2026-02-03 22:15:26,773 - INFO -     Epoch Time: 12.42s
+2026-02-03 22:15:26,773 - INFO -     Data Loading Time: 0.87s (7.0%)
+2026-02-03 22:15:26,773 - INFO -     Compute Time: 3.93s (31.6%)
+2026-02-03 22:15:26,773 - INFO -     Validation loss improved. Best model updated.
+2026-02-03 22:15:26,773 - INFO - Final evaluation on test set...
+2026-02-03 22:15:31,912 - INFO - Test Loss: 1.4055, Test Accuracy: 66.24%
+2026-02-03 22:15:32,284 - INFO - ============================================================
+2026-02-03 22:15:32,284 - INFO - BENCHMARK RESULTS SUMMARY
+2026-02-03 22:15:32,284 - INFO - ============================================================
+2026-02-03 22:15:32,284 - INFO - Training Performance:
+2026-02-03 22:15:32,284 - INFO -   Total training time: 85.19s
+2026-02-03 22:15:32,284 - INFO -   Average epoch time: 12.99s
+2026-02-03 22:15:32,284 - INFO -   Data loading ratio: 6.6%
+2026-02-03 22:15:32,284 - INFO -   Training throughput: 579.0 samples/sec
+2026-02-03 22:15:32,284 - INFO - Model Performance:
+2026-02-03 22:15:32,284 - INFO -   Best validation accuracy: 64.37%
+2026-02-03 22:15:32,284 - INFO -   Final test accuracy: 66.24%
+2026-02-03 22:15:32,284 - INFO -   Test F1 score: 64.71%
+2026-02-03 22:15:32,284 - INFO - System Configuration:
+2026-02-03 22:15:32,284 - INFO -   Batch size: 64
+2026-02-03 22:15:32,284 - INFO -   Number of workers: 10
+2026-02-03 22:15:32,284 - INFO -   Trainable parameters: 14,091
+2026-02-03 22:15:32,284 - INFO - Results appended to multiple_benchmark_results.csv
+2026-02-03 22:15:32,284 - INFO - Results saved with Run ID: rclone_balanced_optimized
+2026-02-03 22:15:32,285 - INFO - ============================================================
+2026-02-03 22:15:32,285 - INFO - Benchmark rclone_balanced_optimized completed successfully!
+2026-02-03 22:15:32,285 - INFO - ============================================================
+2026-02-03 22:15:32,285 - INFO - Cleaning up...
+2026-02-03 22:15:32,337 - INFO - Unmounting /home/cc/rclone_mount...
+2026-02-03 22:15:32,385 - WARNING - Used force unmount
