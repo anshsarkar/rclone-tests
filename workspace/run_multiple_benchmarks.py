@@ -175,6 +175,38 @@ BENCHMARK_CONFIGURATIONS = [
             'pin_memory': True,
         },
         'epochs': 5
+    },
+    {
+        'run_id': 'rclone_balanced_streaming',
+        'description': 'Balanced optimized with streaming and no-modtime',
+        'rclone_remote': 'rclone_s3',
+        'rclone_container': 'ansh-lab4-tests-bucket',
+        'rclone_options': {
+            'vfs_cache_mode': 'full',
+            'vfs_cache_max_size': '35G',
+            'vfs_cache_max_age': '6h',
+            'vfs_read_chunk_size': '384M',
+            'vfs_read_chunk_size_limit': 'off',
+            'vfs_read_ahead': '3G',
+            'vfs_read_chunk_streams': '32',
+            'no_modtime': True,
+            'buffer_size': '768M',
+            'transfers': '40',
+            'checkers': '20',
+            'dir_cache_time': '90m',
+            'attr_timeout': '45s',
+            'low_level_retries': '12',
+            'retries': '4',
+            'contimeout': '45s',
+            'timeout': '240s',
+        },
+        'dataloader_options': {
+            'batch_size': 96,
+            'num_workers': 10,
+            'prefetch_factor': 5,
+            'pin_memory': True,
+        },
+        'epochs': 5
     }
 ]
 
@@ -248,6 +280,7 @@ def build_mount_command(remote, container, mount_point, options):
         'vfs_read_chunk_size': '--vfs-read-chunk-size',
         'vfs_read_chunk_size_limit': '--vfs-read-chunk-size-limit',
         'vfs_read_ahead': '--vfs-read-ahead',
+        'vfs_read_chunk_streams': '--vfs-read-chunk-streams',
         'buffer_size': '--buffer-size',
         'transfers': '--transfers',
         'checkers': '--checkers',
@@ -263,6 +296,9 @@ def build_mount_command(remote, container, mount_point, options):
         value = options.get(key)
         if value:
             cmd += f" {flag} {value}"
+    
+    if options.get('no_modtime'):
+        cmd += " --no-modtime"
     
     cmd += " --daemon"
     return cmd
