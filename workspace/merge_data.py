@@ -38,19 +38,15 @@ def clean_gpu_data(df_gpu):
         print("No GPU data to clean")
         return pd.DataFrame()
     
-    print(f"\nCleaning GPU data...")
-    print(f"Original GPU samples: {len(df_gpu)}")
+    print(f"\nProcessing GPU data...")
+    print(f"Total GPU samples: {len(df_gpu)}")
     
-    # Remove entries with 0% GPU utilization
+    # Keep all GPU data including 0% utilization
     if 'gpu_util_percent' in df_gpu.columns:
-        df_gpu_clean = df_gpu[df_gpu['gpu_util_percent'] > 0].copy()
-        print(f"After removing 0% utilization: {len(df_gpu_clean)} samples")
-        removed = len(df_gpu) - len(df_gpu_clean)
-        print(f"Removed {removed} zero-utilization samples ({removed/len(df_gpu)*100:.1f}%)")
-        
-        if len(df_gpu_clean) == 0:
-            print("WARNING: No valid GPU data after cleaning!")
-            return pd.DataFrame()
+        df_gpu_clean = df_gpu.copy()
+        zero_util_count = (df_gpu['gpu_util_percent'] == 0).sum()
+        print(f"Samples with 0% utilization: {zero_util_count} ({zero_util_count/len(df_gpu)*100:.1f}%)")
+        print("Keeping all GPU data including 0% utilization samples")
         
         return df_gpu_clean
     else:
