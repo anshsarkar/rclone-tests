@@ -4,7 +4,7 @@ import pandas as pd
 import os
 
 # File paths
-RESULTS_CSV = 'training_benchmark_results.csv'
+RESULTS_CSV = 'multiple_benchmark_results.csv'
 GPU_CSV = 'gpu_utilization.csv'
 FINAL_CSV = 'final_benchmark_results.csv'
 
