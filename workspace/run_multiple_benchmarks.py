@@ -867,4 +867,7 @@ def main():
     print(f"Results saved to: {RESULTS_CSV}")
     print("="*80)
 
+if __name__ == "__main__":
+    main()
+
 
