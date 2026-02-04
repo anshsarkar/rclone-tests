@@ -242,4 +242,4 @@ total_execution_time = script_end_time - script_start_time
 execution_minutes = total_execution_time / 60
 
 print(f"Total script execution time: {total_execution_time:.2f} seconds ({execution_minutes:.2f} minutes)")
-print("Training completed - Data loaded via rclone mount")
+# print("Training completed - Data loaded via rclone mount")

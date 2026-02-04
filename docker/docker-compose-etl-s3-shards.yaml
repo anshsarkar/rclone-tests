@@ -259,6 +259,11 @@ services:
         rclone copy /data/litdata-shards rclone_s3:$$RCLONE_CONTAINER/optimized-dataset \
           --progress \
           --transfers=16 \
-          --checkers=8
+          --checkers=8 \
+          --retries=5 \
+          --retries-sleep=10s \
+          --low-level-retries=10 \
+          --timeout=120s \
+          --contimeout=60s
         
         echo "========== SHARDING COMPLETE =========="
