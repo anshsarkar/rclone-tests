@@ -133,27 +133,27 @@ train_loader = DataLoader(
     batch_size=config["batch_size"],
     shuffle=False,
     num_workers=0,
-    pin_memory=True,
-    persistent_workers=True,
-    prefetch_factor=4,
+    #pin_memory=True,
+    #persistent_workers=True,
+    #prefetch_factor=4,
 )
 val_loader = DataLoader(
     val_dataset,
     batch_size=config["batch_size"],
     shuffle=False,
     num_workers=0,
-    pin_memory=True,
-    persistent_workers=True,
-    prefetch_factor=4,
+    #pin_memory=True,
+    #persistent_workers=True,
+    #prefetch_factor=4,
 )
 test_loader = DataLoader(
     test_dataset,
     batch_size=config["batch_size"],
     shuffle=False,
     num_workers=0,
-    pin_memory=True,
-    persistent_workers=True,
-    prefetch_factor=4,
+    #pin_memory=True,
+    #persistent_workers=True,
+    #prefetch_factor=4,
 )
 
 
