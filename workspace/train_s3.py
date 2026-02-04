@@ -129,7 +129,7 @@ class S3ImageFolder(torch.utils.data.Dataset):
 
         # Log S3 access for first few files and then periodically
         self.s3_access_count += 1
-        if self.s3_access_count <= 5 or self.s3_access_count % 1000 == 0:
+        if self.s3_access_count <= 5 or self.s3_access_count % 10000 == 0:
             logger.info(f"Reading image directly from S3: s3://{self.bucket_name}/{key} (access #{self.s3_access_count})")
 
         obj = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)
