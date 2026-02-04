@@ -1,0 +1,255 @@
+import numpy as np
+import os
+import subprocess
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+from torchvision import datasets, models, transforms
+
+### New imports for Lightning
+import lightning as L
+from lightning import Trainer
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, BackboneFinetuning
+torch.set_float32_matmul_precision('medium')
+
+import io
+from PIL import Image
+from litdata import StreamingDataset
+
+### Configure the training job 
+# All hyperparameters will be set here, in one convenient place
+# This part is the same as the "vanilla" Pytorch version
+config = {
+    "initial_epochs": 5,
+    "total_epochs": 20,
+    "patience": 5,
+    "batch_size": 32,
+    "lr": 1e-4,
+    "fine_tune_lr": 1e-6,
+    "model_architecture": "MobileNetV2",
+    "dropout_probability": 0.5,
+    "random_horizontal_flip": 0.5,
+    "random_rotation": 15,
+    "color_jitter_brightness": 0.2,
+    "color_jitter_contrast": 0.2,
+    "color_jitter_saturation": 0.2,
+    "color_jitter_hue": 0.1
+}
+
+### Prepare data loaders
+# This part is the same as the "vanilla" Pytorch version
+
+# Get data directory from environment variable, if set
+food_11_data_dir = os.getenv("FOOD11_DATA_DIR", "Food-11")
+
+# Define transforms for training data augmentation
+train_transform = transforms.Compose([
+    transforms.Resize(224),
+    transforms.CenterCrop(224),
+    transforms.RandomHorizontalFlip(p=config["random_horizontal_flip"]),
+    transforms.RandomRotation(config["random_rotation"]),
+    transforms.ColorJitter(
+        brightness=config["color_jitter_brightness"],
+        contrast=config["color_jitter_contrast"],
+        saturation=config["color_jitter_saturation"],
+        hue=config["color_jitter_hue"]
+    ),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+
+val_test_transform = transforms.Compose([
+    transforms.Resize(224),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+
+
+# LitData Streaming from S3, Where shards live (S3) + where to cache locally on the node
+S3_BUCKET = os.getenv("S3_BUCKET", "rb-litdata-food11")
+LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
+LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", "/mnt/local/litdata_cache")
+
+TRAIN_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/training"
+VAL_URL   = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/validation"
+TEST_URL  = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/evaluation"
+
+os.makedirs(LITDATA_CACHE_DIR, exist_ok=True)
+
+def decode_litdata_sample(sample, transform):
+    """
+    sample comes from your sharding fn:
+      {"image": bytes, "label": int, "path": str}
+    """
+    img_bytes = sample["image"]
+    label = int(sample["label"])
+
+    image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    if transform:
+        image = transform(image)
+
+    return image, label
+
+class LitDataFood11(torch.utils.data.Dataset):
+    def __init__(self, remote_url: str, cache_subdir: str, transform):
+        self.ds = StreamingDataset(
+            remote=remote_url,
+            local=os.path.join(LITDATA_CACHE_DIR, cache_subdir),
+            shuffle=True,   # shard-aware shuffle
+        )
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx):
+        return decode_litdata_sample(self.ds[idx], self.transform)
+
+# Load datasets (streaming)
+train_dataset = LitDataFood11(TRAIN_URL, "train", train_transform)
+val_dataset   = LitDataFood11(VAL_URL, "val", val_test_transform)
+test_dataset  = LitDataFood11(TEST_URL, "test", val_test_transform)
+
+# DataLoaders (IMPORTANT: keep shuffle=False because StreamingDataset shuffles internally)
+train_loader = DataLoader(
+    train_dataset,
+    batch_size=config["batch_size"],
+    shuffle=False,
+    num_workers=16,
+    pin_memory=True,
+    persistent_workers=True,
+    prefetch_factor=4,
+)
+val_loader = DataLoader(
+    val_dataset,
+    batch_size=config["batch_size"],
+    shuffle=False,
+    num_workers=16,
+    pin_memory=True,
+    persistent_workers=True,
+    prefetch_factor=4,
+)
+test_loader = DataLoader(
+    test_dataset,
+    batch_size=config["batch_size"],
+    shuffle=False,
+    num_workers=8,
+    pin_memory=True,
+    persistent_workers=True,
+    prefetch_factor=4,
+)
+
+
+
+### Define training and validation/test functions
+### Define the model
+
+# We create a class LightningFood11Model that inherits the Pytorch Lightning LightningModule
+# The Pytorch "boilerplate" has moved inside it:
+#  - the model defintion is now inside init
+#  - we are going to use Lightning's convenient BackboneFinetuning callback, so we also define the part of the model that is the backbone
+#  - the forward pass from the train and validate functions are now inside the forward method
+#  - the backward pass from the train and validate functions are now inside the training_step, validation_step, and test_step methods
+#  - the optimizer configuration is now inside configure_optimizers
+
+class LightningFood11Model(L.LightningModule):
+    def __init__(self):
+        super().__init__()
+        self.model = models.mobilenet_v2(weights='MobileNet_V2_Weights.DEFAULT')
+        num_ftrs = self.model.last_channel
+        self.model.classifier = nn.Sequential(
+            nn.Dropout(config["dropout_probability"]),
+            nn.Linear(num_ftrs, 11)
+        )
+        self.criterion = nn.CrossEntropyLoss()
+
+    @property
+    def backbone(self):
+        """Expose the backbone for BackboneFinetuning callback."""
+        return self.model.features
+
+    def forward(self, x):
+        return self.model(x)
+
+    def training_step(self, batch, batch_idx):
+        inputs, labels = batch
+        outputs = self(inputs)
+        loss = self.criterion(outputs, labels)
+        acc = (outputs.argmax(dim=1) == labels).float().mean()
+        # update loss and accuracy in progress bar every epoch
+        self.log('train_loss', loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
+        self.log('train_accuracy', acc, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
+        return {"loss": loss, "train_accuracy": acc}
+        
+    def validation_step(self, batch, batch_idx):
+        inputs, labels = batch
+        outputs = self(inputs)
+        loss = self.criterion(outputs, labels)
+        acc = (outputs.argmax(dim=1) == labels).float().mean()
+        # need to set val_loss so that callbacks can use it
+        # also update loss and accuracy in progress bar every epoch
+        self.log('val_loss', loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
+        self.log('val_accuracy', acc, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
+        return {"val_loss": loss, "val_accuracy": acc}
+
+    def test_step(self, batch, batch_idx):
+        inputs, labels = batch
+        outputs = self(inputs)
+        loss = self.criterion(outputs, labels)
+        acc = (outputs.argmax(dim=1) == labels).float().mean()
+        self.log('test_loss', loss)
+        self.log('test_accuracy', acc)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.model.classifier.parameters(), lr=config["lr"])
+        return optimizer
+
+### Lightning callbacks
+# Many of the things we hand-coded in Pytorch are available "out of the box" in Pytorch Lightning
+# - saving model when vaidation loss improves: use ModelCheckpoint
+# - early stopping: use EarlyStopping
+# - un-freeze backbone/base model after a few epochs, and continue training with a small learning rate: BackboneFinetuning
+
+checkpoint_callback = ModelCheckpoint(
+    dirpath="checkpoints/",  # where to save the model
+    filename="food11",  # model name
+    monitor="val_loss",  # watch validation loss
+    mode="min",  # save the model with the lowest validation loss
+    save_top_k=1  # keep only the best model
+)
+
+early_stopping_callback = EarlyStopping(
+    monitor="val_loss",
+    patience=config["patience"],
+    mode="min"
+)
+
+backbone_finetuning_callback = BackboneFinetuning(
+    unfreeze_backbone_at_epoch=config["initial_epochs"],
+    backbone_initial_lr = config["fine_tune_lr"],  # Sets initial learning rate for finetuning
+    should_align=True
+)
+
+
+### Training loop 
+# The training loop in "vanilla" Pytorch is completely replaced with a Lightning Trainer
+# it also includes baked-in support for distributed training across GPUs
+# we set devices="auto" and let it figure out by itself how many GPUs are available, and how to use them
+
+lightning_food11_model = LightningFood11Model()
+    
+trainer = Trainer(
+    max_epochs=config["total_epochs"],
+    accelerator="gpu",
+    devices="auto",
+    callbacks=[checkpoint_callback, early_stopping_callback, backbone_finetuning_callback]
+)
+
+trainer.fit(lightning_food11_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+
+### Evaluate on test set
+trainer.test(lightning_food11_model, dataloaders=test_loader)
