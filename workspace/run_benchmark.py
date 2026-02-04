@@ -36,11 +36,11 @@ RESULTS_CSV = 'training_benchmark_results.csv'
 RCLONE_OPTIONS = {
     # Cache settings
     'vfs_cache_mode': 'full',        # off, minimal, writes, full
-    'vfs_cache_max_size': '20G',     # e.g., 5G, 10G, 20G, 50G
-    'vfs_cache_max_age': '5h',       # e.g., 1h, 24h
+    'vfs_cache_max_size': '50G',     # e.g., 5G, 10G, 20G, 50G
+    'vfs_cache_max_age': '8h',       # e.g., 1h, 24h
     
     # Read performance
-    'vfs_read_chunk_size': '256M',    # e.g., 16M, 64M, 128M, 256M
+    'vfs_read_chunk_size': '512M',    # e.g., 16M, 64M, 128M, 256M
     'vfs_read_chunk_size_limit': 'off',  # e.g., 256M, 512M, off (unlimited)
     'vfs_read_ahead': '2G',        # e.g., 128M, 256M, 512M, 1G
     'buffer_size': '512M',           # e.g., 16M, 64M, 128M, 256M

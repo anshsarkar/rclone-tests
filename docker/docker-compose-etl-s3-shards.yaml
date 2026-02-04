@@ -1,0 +1,296 @@
+name: food11-etl-s3
+
+volumes:
+  food11:
+
+services:
+  extract-data:
+    container_name: etl_extract_data
+    image: python:3.11
+    user: root
+    volumes:
+      - food11:/data
+    working_dir: /data
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+
+        echo "Resetting dataset directory..."
+        rm -rf Food-11
+        mkdir -p Food-11
+        cd Food-11
+
+        echo "Downloading dataset zip..."
+        curl -L https://nyu.box.com/shared/static/m5kvcl25hfpljul3elhu6xz8y2w61op4.zip \
+          -o Food-11.zip
+
+        echo "Unzipping dataset..."
+        unzip -q Food-11.zip
+        rm -f Food-11.zip
+
+        echo ""
+        echo "========== EXTRACT STAGE SUMMARY =========="
+        echo "Contents of /data:"
+        ls -l /data
+        echo ""
+        echo "Item counts per folder:"
+        for dir in /data/Food-11/*/; do
+          count=$$(find "$$dir" -type f | wc -l)
+          echo "  $$(basename $$dir): $$count items"
+        done
+        total=$$(find /data/Food-11 -type f | wc -l)
+        echo "----------------------------------------"
+        echo "TOTAL ITEMS: $$total"
+        echo "=========================================="
+
+  transform-data:
+    container_name: etl_transform_data
+    image: python:3.11
+    volumes:
+      - food11:/data
+    working_dir: /data/Food-11
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+
+        python3 -c '
+        import os
+        import shutil
+
+        dataset_base_dir = "/data/Food-11"
+        subdirs = ["training", "validation", "evaluation"]
+        classes = [
+            "Bread", "Dairy product", "Dessert", "Egg", "Fried food",
+            "Meat", "Noodles/Pasta", "Rice", "Seafood", "Soup", "Vegetable/Fruit"
+        ]
+
+        for subdir in subdirs:
+            dir_path = os.path.join(dataset_base_dir, subdir)
+            if not os.path.exists(dir_path):
+                continue
+
+            for i, class_name in enumerate(classes):
+                class_dir = os.path.join(dir_path, f"class_{i:02d}")
+                os.makedirs(class_dir, exist_ok=True)
+                for f in os.listdir(dir_path):
+                    if f.startswith(f"{i}_"):
+                        shutil.move(
+                            os.path.join(dir_path, f),
+                            os.path.join(class_dir, f)
+                        )
+        '
+
+        echo ""
+        echo "========== TRANSFORM STAGE SUMMARY =========="
+        echo "Contents of /data/Food-11:"
+        ls -l /data/Food-11
+        echo ""
+        for split in training validation evaluation; do
+          if [ -d "/data/Food-11/$$split" ]; then
+            echo "--- $$split ---"
+            for class_dir in /data/Food-11/$$split/*/; do
+              count=$$(find "$$class_dir" -type f | wc -l)
+              echo "  $$(basename $$class_dir): $$count items"
+            done
+            split_total=$$(find /data/Food-11/$$split -type f | wc -l)
+            echo "  SUBTOTAL: $$split_total"
+            echo ""
+          fi
+        done
+        total=$$(find /data/Food-11 -type f | wc -l)
+        echo "----------------------------------------"
+        echo "TOTAL ITEMS: $$total"
+        echo "============================================="
+
+  load-data:
+    container_name: etl_load_data_s3
+    image: rclone/rclone:latest
+    volumes:
+      - food11:/data
+      - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
+    environment:
+      - RCLONE_CONTAINER=${RCLONE_CONTAINER}
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        if [ -z "$$RCLONE_CONTAINER" ]; then
+          echo "ERROR: RCLONE_CONTAINER is not set"
+          exit 1
+        fi
+        echo "Using S3 API to upload data..."
+        echo "Cleaning up existing contents of container..."
+        rclone delete rclone_s3:$$RCLONE_CONTAINER --rmdirs || true
+
+        rclone copy /data/Food-11 rclone_s3:$$RCLONE_CONTAINER \
+        --progress \
+        --transfers=8 \
+        --checkers=4 \
+        --retries=5 \
+        --retries-sleep=10s \
+        --low-level-retries=10 \
+        --timeout=120s \
+        --contimeout=60s
+
+        echo ""
+        echo "========== LOAD STAGE SUMMARY =========="
+        echo "Directories in container:"
+        rclone lsd rclone_s3:$$RCLONE_CONTAINER
+        echo ""
+        for split in training validation evaluation; do
+          echo "--- $$split ---"
+          for class_dir in $$(rclone lsf rclone_s3:$$RCLONE_CONTAINER/$$split/ --dirs-only 2>/dev/null); do
+            count=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/$$split/$$class_dir 2>/dev/null | wc -l)
+            echo "  $${class_dir%/}: $$count items"
+          done
+          split_total=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/$$split 2>/dev/null | wc -l)
+          echo "  SUBTOTAL: $$split_total"
+          echo ""
+        done
+        total=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER 2>/dev/null | wc -l)
+        echo "----------------------------------------"
+        echo "TOTAL ITEMS IN OBJECT STORE: $$total"
+        echo "========================================="
+
+  # STAGE 3B: SHARD & UPLOAD (Optimized for LitData)
+  shard-data:
+    container_name: etl_shard_data_s3
+    image: python:3.11
+    shm_size: '10gb'
+    volumes:
+      - food11:/data
+      - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
+    environment:
+      - RCLONE_CONTAINER=${RCLONE_CONTAINER}
+      - LITDATA_CHUNK_SIZE=${LITDATA_CHUNK_SIZE:-1024}
+    working_dir: /data
+    depends_on:
+      - transform-data 
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        
+        if [ -z "$$RCLONE_CONTAINER" ]; then
+          echo "ERROR: RCLONE_CONTAINER is not set"
+          exit 1
+        fi
+        
+        echo "Installing system dependencies (curl & rclone)..."
+        apt-get update && apt-get install -y curl
+        curl https://rclone.org/install.sh | bash
+
+        echo "Installing Python packages..."
+        pip install --no-cache-dir litdata 
+        
+        echo "Starting litdata sharding process..."
+        mkdir -p /data/litdata-shards
+        
+        # Create sharding script
+        cat > shard_food11.py << 'EOF'
+        import os
+        from pathlib import Path
+        import multiprocessing as mp
+        from litdata import optimize
+
+        CLASSES = [f"class_{i:02d}" for i in range(11)]
+        IMG_EXTS = {".jpg", ".jpeg", ".png"}
+        CHUNK_SIZE = int(os.getenv("LITDATA_CHUNK_SIZE", "1024"))
+
+        def pack_image(sample_path: str):
+            label_name = Path(sample_path).parent.name
+            if label_name not in CLASSES:
+                raise ValueError(f"Unexpected class folder: {label_name} for {sample_path}")
+
+            label = CLASSES.index(label_name)
+            with open(sample_path, "rb") as f:
+                img_bytes = f.read()
+
+            return {"image": img_bytes, "label": label, "path": str(sample_path)}
+
+        def list_images(split_dir: str):
+            p = Path(split_dir)
+            files = [str(x) for x in p.rglob("*") if x.is_file() and x.suffix.lower() in IMG_EXTS]
+            files.sort()
+            return files
+
+        def main():
+            food11_local_dir = "/data/Food-11"
+            local_out_root = "/data/litdata-shards"
+
+            for split in ["training", "validation", "evaluation"]:
+                split_dir = os.path.join(food11_local_dir, split)
+                out_dir = os.path.join(local_out_root, split)
+
+                inputs = list_images(split_dir)
+                print(f"[litdata] split={split} files={len(inputs)} -> local_out={out_dir}", flush=True)
+                if len(inputs) == 0:
+                    continue
+
+                optimize(
+                    inputs=inputs,
+                    output_dir=out_dir,
+                    fn=pack_image,
+                    chunk_size=CHUNK_SIZE,
+                    num_workers=8
+                )
+        if __name__ == "__main__":
+            try:
+                mp.set_start_method("spawn", force=True)
+            except RuntimeError:
+                pass
+            main()
+        EOF
+        
+        # Run script (Tab corrected for EOF block above)
+        python shard_food11.py
+        
+        echo "Uploading sharded data to S3..."
+        echo "Target: rclone_s3:$$RCLONE_CONTAINER/optimized-dataset"
+        
+        # Cleanup remote folder first
+        rclone delete rclone_s3:$$RCLONE_CONTAINER/optimized-dataset --rmdirs || true
+        
+        rclone copy /data/litdata-shards rclone_s3:$$RCLONE_CONTAINER/optimized-dataset \
+          --progress \
+          --transfers=16 \
+          --checkers=8 \
+          --retries=5 \
+          --retries-sleep=10s \
+          --low-level-retries=10 \
+          --timeout=120s \
+          --contimeout=60s \
+          --s3-upload-concurrency=4 \
+        
+        echo ""
+        echo "LOCAL BIN COUNTS:"
+        for split in training validation evaluation; do
+          if [ -d "/data/litdata-shards/$$split" ]; then
+            bin_count=$$(find /data/litdata-shards/$$split -name "*.bin" | wc -l)
+            echo "  $$split: $$bin_count bins"
+          fi
+        done
+        total_local_bins=$$(find /data/litdata-shards -name "*.bin" | wc -l)
+        echo "  TOTAL LOCAL BINS: $$total_local_bins"
+        echo ""
+        
+        echo "S3 BIN COUNTS:"
+        for split in training validation evaluation; do
+          s3_bin_count=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/optimized-dataset/$$split 2>/dev/null | grep "\.bin$$" | wc -l)
+          echo "  $$split: $$s3_bin_count bins"
+        done
+        total_s3_bins=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/optimized-dataset 2>/dev/null | grep "\.bin$$" | wc -l)
+        echo "  TOTAL S3 BINS: $$total_s3_bins"
+        echo ""
+        
+        # Verification check
+        if [ "$$total_local_bins" -eq "$$total_s3_bins" ]; then
+          echo "VERIFICATION PASSED: Local and S3 bin counts match!"
+        else
+          echo "VERIFICATION FAILED: Local ($$total_local_bins) and S3 ($$total_s3_bins) bin counts do not match!"
+        fi

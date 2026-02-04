@@ -40,7 +40,7 @@ config = {
 
 script_start_time = time.time()
 print(f"Script started at: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(script_start_time))}")
-food_11_data_dir = os.getenv("FOOD11_DATA_DIR", "./rclone_mount")
+food_11_data_dir = os.getenv("FOOD11_DATA_DIR", "./Food-11-data/Food-11")
 
 # Define transforms for training data augmentation
 train_transform = transforms.Compose([
@@ -196,41 +196,41 @@ for epoch in range(config.get("initial_epochs", 5)):
 
 ### Un-freeze backbone/base model and keep training with smaller learning rate
 
-# unfreeze to fine-tune the entire model
-for param in food11_model.features.parameters():
-    param.requires_grad = True
+# # unfreeze to fine-tune the entire model
+# for param in food11_model.features.parameters():
+#     param.requires_grad = True
 
-trainable_params  = sum(p.numel() for p in food11_model.parameters() if p.requires_grad)
+# trainable_params  = sum(p.numel() for p in food11_model.parameters() if p.requires_grad)
 
-# optimizer for the entire model with a smaller learning rate for fine-tuning
-optimizer = optim.Adam(food11_model.parameters(), lr=config.get("fine_tune_lr", 1e-5))
+# # optimizer for the entire model with a smaller learning rate for fine-tuning
+# optimizer = optim.Adam(food11_model.parameters(), lr=config.get("fine_tune_lr", 1e-5))
 
-patience_counter = 0
+# patience_counter = 0
 
-# Fine-tune entire model for the remaining epochs
-for epoch in range(config.get("initial_epochs", 5), config.get("total_epochs", 20)):
+# # Fine-tune entire model for the remaining epochs
+# for epoch in range(config.get("initial_epochs", 5), config.get("total_epochs", 20)):
 
-    epoch_start_time = time.time()
-    train_loss, train_acc = train(food11_model, train_loader, criterion, optimizer, device)
-    val_loss, val_acc = validate(food11_model, val_loader, criterion, device)
-    epoch_time = time.time() - epoch_start_time
+#     epoch_start_time = time.time()
+#     train_loss, train_acc = train(food11_model, train_loader, criterion, optimizer, device)
+#     val_loss, val_acc = validate(food11_model, val_loader, criterion, device)
+#     epoch_time = time.time() - epoch_start_time
 
-    print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.4f}, Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc:.4f}, Time: {epoch_time:.2f}s")
+#     print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.4f}, Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc:.4f}, Time: {epoch_time:.2f}s")
 
-    # Check for improvement in validation loss
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        patience_counter = 0
-        torch.save(food11_model.state_dict(), "food11.pth")
-        print("  Validation loss improved. Model saved.")
+#     # Check for improvement in validation loss
+#     if val_loss < best_val_loss:
+#         best_val_loss = val_loss
+#         patience_counter = 0
+#         torch.save(food11_model.state_dict(), "food11.pth")
+#         print("  Validation loss improved. Model saved.")
 
-    else:
-        patience_counter += 1
-        print(f"  No improvement in validation loss. Patience counter: {patience_counter}")
+#     else:
+#         patience_counter += 1
+#         print(f"  No improvement in validation loss. Patience counter: {patience_counter}")
 
-    if patience_counter >= config.get("patience", 5):
-        print("  Early stopping triggered.")
-        break
+#     if patience_counter >= config.get("patience", 5):
+#         print("  Early stopping triggered.")
+#         break
 
 
 ### Evaluate on test set
@@ -242,4 +242,4 @@ total_execution_time = script_end_time - script_start_time
 execution_minutes = total_execution_time / 60
 
 print(f"Total script execution time: {total_execution_time:.2f} seconds ({execution_minutes:.2f} minutes)")
-print("Training completed - Data loaded via rclone mount")
+# print("Training completed - Data loaded via rclone mount")
