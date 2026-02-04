@@ -81,7 +81,7 @@ if not (S3_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
         "(and optionally AWS_DEFAULT_REGION)."
     )
 
-STORAGE_OPTIONS = {"client_kwargs": {"endpoint_url": S3_ENDPOINT_URL}}
+STORAGE_OPTIONS = {"endpoint_url": S3_ENDPOINT_URL}
 SESSION_OPTIONS = {
     "aws_access_key_id": AWS_ACCESS_KEY_ID,
     "aws_secret_access_key": AWS_SECRET_ACCESS_KEY,
