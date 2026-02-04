@@ -149,6 +149,7 @@ services:
   shard-data:
     container_name: etl_shard_data_s3
     image: python:3.11
+    shm_size: '4gb'
     volumes:
       - food11:/data
       - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
