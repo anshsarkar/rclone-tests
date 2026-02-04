@@ -8,10 +8,14 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import models, transforms
 
+# NEW: multiprocessing (surgical)
+import torch.multiprocessing as mp
+
 ### New imports for Lightning
 import lightning as L
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, BackboneFinetuning
+
 torch.set_float32_matmul_precision("medium")
 
 import io
@@ -20,8 +24,6 @@ from litdata import StreamingDataset
 
 
 ### Configure the training job
-# All hyperparameters will be set here, in one convenient place
-# This part is the same as the "vanilla" Pytorch version
 config = {
     "initial_epochs": 5,
     "total_epochs": 20,
@@ -38,6 +40,7 @@ config = {
     "color_jitter_saturation": 0.2,
     "color_jitter_hue": 0.1,
 }
+
 # Define transforms for training data augmentation
 train_transform = transforms.Compose(
     [
@@ -64,6 +67,7 @@ val_test_transform = transforms.Compose(
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 )
+
 # LitData Streaming from S3 (shards live in S3, cached locally)
 S3_BUCKET = os.getenv("S3_BUCKET", "rb-litdata-food11")
 LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
@@ -124,37 +128,13 @@ class LitDataFood11(torch.utils.data.Dataset):
         return decode_litdata_sample(self.ds[idx], self.transform)
 
 
-train_dataset = LitDataFood11(TRAIN_URL, "training", train_transform, shuffle=True)
-val_dataset = LitDataFood11(VAL_URL, "validation", val_test_transform, shuffle=False)
-test_dataset = LitDataFood11(TEST_URL, "evaluation", val_test_transform, shuffle=False)
+# NEW: safe worker init (surgical)
+def _worker_init_fn(worker_id: int):
+    import random
 
-train_loader = DataLoader(
-    train_dataset,
-    batch_size=config["batch_size"],
-    shuffle=False,
-    num_workers=4,
-    pin_memory=True,
-    persistent_workers=True,
-    prefetch_factor=2,
-)
-val_loader = DataLoader(
-    val_dataset,
-    batch_size=config["batch_size"],
-    shuffle=False,
-    num_workers=4,
-    pin_memory=True,
-    persistent_workers=True,
-    prefetch_factor=2,
-)
-test_loader = DataLoader(
-    test_dataset,
-    batch_size=config["batch_size"],
-    shuffle=False,
-    num_workers=4,
-    pin_memory=True,
-    persistent_workers=True,
-    prefetch_factor=2,
-)
+    seed = torch.initial_seed() % 2**32
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 class LightningFood11Model(L.LightningModule):
@@ -206,17 +186,14 @@ class LightningFood11Model(L.LightningModule):
         optimizer = optim.Adam(self.model.classifier.parameters(), lr=config["lr"])
         return optimizer
 
+
 ### Lightning callbacks
-# Many of the things we hand-coded in Pytorch are available "out of the box" in Pytorch Lightning
-# - saving model when vaidation loss improves: use ModelCheckpoint
-# - early stopping: use EarlyStopping
-# - un-freeze backbone/base model after a few epochs, and continue training with a small learning rate: BackboneFinetuning
 checkpoint_callback = ModelCheckpoint(
-    dirpath="checkpoints/", # where to save the model
-    filename="food11", # model name
-    monitor="val_loss", # watch validation loss
-    mode="min", # save the model with the lowest validation loss
-    save_top_k=1, # keep only the best model
+    dirpath="checkpoints/",
+    filename="food11",
+    monitor="val_loss",
+    mode="min",
+    save_top_k=1,
 )
 
 early_stopping_callback = EarlyStopping(
@@ -227,22 +204,61 @@ early_stopping_callback = EarlyStopping(
 
 backbone_finetuning_callback = BackboneFinetuning(
     unfreeze_backbone_at_epoch=config["initial_epochs"],
-    backbone_initial_lr=config["fine_tune_lr"], # Sets initial learning rate for finetuning
+    backbone_initial_lr=config["fine_tune_lr"],
     should_align=True,
 )
 
-### Training loop
-# The training loop in "vanilla" Pytorch is completely replaced with a Lightning Trainer
-# it also includes baked-in support for distributed training across GPUs
-# we set devices="auto" and let it figure out by itself how many GPUs are available, and how to use them
-lightning_food11_model = LightningFood11Model()
 
-trainer = Trainer(
-    max_epochs=config["total_epochs"],
-    accelerator="auto",
-    devices="auto",
-    callbacks=[checkpoint_callback, early_stopping_callback, backbone_finetuning_callback],
-)
+# NEW: main wrapper + spawn (surgical)
+def main():
+    train_dataset = LitDataFood11(TRAIN_URL, "training", train_transform, shuffle=True)
+    val_dataset = LitDataFood11(VAL_URL, "validation", val_test_transform, shuffle=False)
+    test_dataset = LitDataFood11(TEST_URL, "evaluation", val_test_transform, shuffle=False)
 
-trainer.fit(lightning_food11_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
-trainer.test(lightning_food11_model, dataloaders=test_loader) ### Evaluate on test set
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config["batch_size"],
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=False,  # CHANGED: was True (can deadlock with streaming)
+        prefetch_factor=2,
+        worker_init_fn=_worker_init_fn,  # NEW (safe)
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=config["batch_size"],
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=False,  # CHANGED: was True (can deadlock with streaming)
+        prefetch_factor=2,
+        worker_init_fn=_worker_init_fn,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=config["batch_size"],
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=False,  # CHANGED: was True (can deadlock with streaming)
+        prefetch_factor=2,
+        worker_init_fn=_worker_init_fn,
+    )
+
+    lightning_food11_model = LightningFood11Model()
+
+    trainer = Trainer(
+        max_epochs=config["total_epochs"],
+        accelerator="auto",
+        devices="auto",
+        callbacks=[checkpoint_callback, early_stopping_callback, backbone_finetuning_callback],
+    )
+
+    trainer.fit(lightning_food11_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+    trainer.test(lightning_food11_model, dataloaders=test_loader)
+
+
+if __name__ == "__main__":
+    mp.set_start_method("spawn", force=True)  # NEW: critical for mp dataloader + S3 streaming
+    main()
