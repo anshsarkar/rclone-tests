@@ -8,7 +8,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import models, transforms
 
-### New imports for Lightning
 import lightning as L
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, BackboneFinetuning
@@ -19,7 +18,6 @@ from PIL import Image
 from litdata import StreamingDataset
 
 
-### Configure the training job
 config = {
     "initial_epochs": 5,
     "total_epochs": 20,
@@ -37,7 +35,6 @@ config = {
     "color_jitter_hue": 0.1,
 }
 
-### Transforms (same as prof)
 train_transform = transforms.Compose(
     [
         transforms.Resize(224),
@@ -64,7 +61,6 @@ val_test_transform = transforms.Compose(
     ]
 )
 
-### LitData Streaming from S3 (shards live in S3, cached locally)
 S3_BUCKET = os.getenv("S3_BUCKET", "rb-litdata-food11")
 LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
 LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", "/mnt/local/litdata_cache")
@@ -74,15 +70,28 @@ TRAIN_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/training"
 VAL_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/validation"
 TEST_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/evaluation"
 
+S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+AWS_DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+
+if not (S3_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
+    raise RuntimeError(
+        "Missing S3 env vars. Set: S3_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY "
+        "(and optionally AWS_DEFAULT_REGION)."
+    )
+
+STORAGE_OPTIONS = {"client_kwargs": {"endpoint_url": S3_ENDPOINT_URL}}
+SESSION_OPTIONS = {
+    "aws_access_key_id": AWS_ACCESS_KEY_ID,
+    "aws_secret_access_key": AWS_SECRET_ACCESS_KEY,
+    "region_name": AWS_DEFAULT_REGION,
+}
+
 
 def decode_litdata_sample(sample, transform):
-    """
-    Expects samples produced during sharding like:
-      {"image": bytes, "label": int, "path": str}
-    """
     img_bytes = sample["image"]
     label = int(sample["label"])
-
     image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
     if transform:
         image = transform(image)
@@ -92,8 +101,6 @@ def decode_litdata_sample(sample, transform):
 class LitDataFood11(torch.utils.data.Dataset):
     def __init__(self, input_url: str, split_name: str, transform, shuffle: bool):
         self.transform = transform
-
-        # Separate cache per split to avoid collisions
         cache_dir = os.path.join(LITDATA_CACHE_DIR, split_name)
         os.makedirs(cache_dir, exist_ok=True)
 
@@ -102,6 +109,8 @@ class LitDataFood11(torch.utils.data.Dataset):
             cache_dir=cache_dir,
             shuffle=shuffle,
             max_pre_download=4,
+            storage_options=STORAGE_OPTIONS,
+            session_options=SESSION_OPTIONS,
         )
 
     def __len__(self):
@@ -111,12 +120,10 @@ class LitDataFood11(torch.utils.data.Dataset):
         return decode_litdata_sample(self.ds[idx], self.transform)
 
 
-# Load datasets (streaming)
 train_dataset = LitDataFood11(TRAIN_URL, "training", train_transform, shuffle=True)
 val_dataset = LitDataFood11(VAL_URL, "validation", val_test_transform, shuffle=False)
 test_dataset = LitDataFood11(TEST_URL, "evaluation", val_test_transform, shuffle=False)
 
-# DataLoaders (keep shuffle=False because StreamingDataset handles it)
 train_loader = DataLoader(
     train_dataset,
     batch_size=config["batch_size"],
@@ -159,7 +166,6 @@ class LightningFood11Model(L.LightningModule):
 
     @property
     def backbone(self):
-        """Expose the backbone for BackboneFinetuning callback."""
         return self.model.features
 
     def forward(self, x):
