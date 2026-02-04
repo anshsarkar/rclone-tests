@@ -4,7 +4,6 @@ volumes:
   food11:
 
 services:
-  # STAGE 1: DOWNLOAD & EXTRACT
   extract-data:
     container_name: etl_extract_data
     image: python:3.11
@@ -17,9 +16,6 @@ services:
       - -c
       - |
         set -e
-        
-        # Ensure we have the tools we need
-        apt-get update && apt-get install -y unzip curl
 
         echo "Resetting dataset directory..."
         rm -rf Food-11
@@ -49,15 +45,12 @@ services:
         echo "TOTAL ITEMS: $$total"
         echo "=========================================="
 
-  # STAGE 2: REORGANIZE FOLDERS
   transform-data:
     container_name: etl_transform_data
     image: python:3.11
     volumes:
       - food11:/data
     working_dir: /data/Food-11
-    depends_on:
-      - extract-data
     command:
       - bash
       - -c
@@ -113,7 +106,6 @@ services:
         echo "TOTAL ITEMS: $$total"
         echo "============================================="
 
-  # STAGE 3A: UPLOAD RAW DATA (Standard)
   load-data:
     container_name: etl_load_data_s3
     image: rclone/rclone:latest
@@ -123,8 +115,6 @@ services:
     environment:
       - RCLONE_CONTAINER=${RCLONE_CONTAINER}
     entrypoint: /bin/sh
-    depends_on:
-      - transform-data
     command:
       - -c
       - |
@@ -138,12 +128,33 @@ services:
 
         rclone copy /data/Food-11 rclone_s3:$$RCLONE_CONTAINER \
         --progress \
-        --transfers=16 \
-        --checkers=8 \
+        --transfers=8 \
+        --checkers=4 \
         --retries=5 \
-        --timeout=120s
+        --retries-sleep=10s \
+        --low-level-retries=10 \
+        --timeout=120s \
+        --contimeout=60s
 
-        echo "========== LOAD STAGE COMPLETE =========="
+        echo ""
+        echo "========== LOAD STAGE SUMMARY =========="
+        echo "Directories in container:"
+        rclone lsd rclone_s3:$$RCLONE_CONTAINER
+        echo ""
+        for split in training validation evaluation; do
+          echo "--- $$split ---"
+          for class_dir in $$(rclone lsf rclone_s3:$$RCLONE_CONTAINER/$$split/ --dirs-only 2>/dev/null); do
+            count=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/$$split/$$class_dir 2>/dev/null | wc -l)
+            echo "  $${class_dir%/}: $$count items"
+          done
+          split_total=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/$$split 2>/dev/null | wc -l)
+          echo "  SUBTOTAL: $$split_total"
+          echo ""
+        done
+        total=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER 2>/dev/null | wc -l)
+        echo "----------------------------------------"
+        echo "TOTAL ITEMS IN OBJECT STORE: $$total"
+        echo "========================================="
 
   # STAGE 3B: SHARD & UPLOAD (Optimized for LitData)
   shard-data:

@@ -40,7 +40,7 @@ config = {
 
 script_start_time = time.time()
 print(f"Script started at: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(script_start_time))}")
-food_11_data_dir = os.getenv("FOOD11_DATA_DIR", "./rclone_mount")
+food_11_data_dir = os.getenv("FOOD11_DATA_DIR", "./Food-11-data/Food-11")
 
 # Define transforms for training data augmentation
 train_transform = transforms.Compose([
