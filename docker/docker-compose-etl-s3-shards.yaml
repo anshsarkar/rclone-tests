@@ -149,7 +149,7 @@ services:
   shard-data:
     container_name: etl_shard_data_s3
     image: python:3.11
-    shm_size: '4gb'
+    shm_size: '10gb'
     volumes:
       - food11:/data
       - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
@@ -226,6 +226,7 @@ services:
                     output_dir=out_dir,
                     fn=pack_image,
                     chunk_size=CHUNK_SIZE,
+                    num_workers=8
                 )
         if __name__ == "__main__":
             try:
