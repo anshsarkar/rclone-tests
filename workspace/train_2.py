@@ -39,7 +39,7 @@ config = {
 
 # Get data directory from environment variable, if set
 # otherwise, assume data is in a directory named "Food-11"
-food_11_data_dir = os.getenv("FOOD11_DATA_DIR", "./Food-11/Food-11")
+food_11_data_dir = os.getenv("FOOD11_DATA_DIR", "./rclone_mount")
 
 # Define transforms for training data augmentation
 train_transform = transforms.Compose([
