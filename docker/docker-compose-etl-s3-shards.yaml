@@ -169,7 +169,7 @@ services:
       - LITDATA_CHUNK_SIZE=${LITDATA_CHUNK_SIZE:-1024}
     working_dir: /data
     depends_on:
-      - transform-data # Runs in PARALLEL with load-data
+      - transform-data 
     command:
       - bash
       - -c
@@ -264,6 +264,33 @@ services:
           --retries-sleep=10s \
           --low-level-retries=10 \
           --timeout=120s \
-          --contimeout=60s
+          --contimeout=60s \
+          --s3-upload-concurrency=4 \
         
-        echo "========== SHARDING COMPLETE =========="
+        echo ""
+        echo "LOCAL BIN COUNTS:"
+        for split in training validation evaluation; do
+          if [ -d "/data/litdata-shards/$$split" ]; then
+            bin_count=$$(find /data/litdata-shards/$$split -name "*.bin" | wc -l)
+            echo "  $$split: $$bin_count bins"
+          fi
+        done
+        total_local_bins=$$(find /data/litdata-shards -name "*.bin" | wc -l)
+        echo "  TOTAL LOCAL BINS: $$total_local_bins"
+        echo ""
+        
+        echo "S3 BIN COUNTS:"
+        for split in training validation evaluation; do
+          s3_bin_count=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/optimized-dataset/$$split 2>/dev/null | grep "\.bin$$" | wc -l)
+          echo "  $$split: $$s3_bin_count bins"
+        done
+        total_s3_bins=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/optimized-dataset 2>/dev/null | grep "\.bin$$" | wc -l)
+        echo "  TOTAL S3 BINS: $$total_s3_bins"
+        echo ""
+        
+        # Verification check
+        if [ "$$total_local_bins" -eq "$$total_s3_bins" ]; then
+          echo "VERIFICATION PASSED: Local and S3 bin counts match!"
+        else
+          echo "VERIFICATION FAILED: Local ($$total_local_bins) and S3 ($$total_s3_bins) bin counts do not match!"
+        fi
