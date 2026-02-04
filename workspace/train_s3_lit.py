@@ -8,6 +8,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import models, transforms
 
+### New imports for Lightning
 import lightning as L
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, BackboneFinetuning
@@ -18,6 +19,9 @@ from PIL import Image
 from litdata import StreamingDataset
 
 
+### Configure the training job
+# All hyperparameters will be set here, in one convenient place
+# This part is the same as the "vanilla" Pytorch version
 config = {
     "initial_epochs": 5,
     "total_epochs": 20,
@@ -34,7 +38,7 @@ config = {
     "color_jitter_saturation": 0.2,
     "color_jitter_hue": 0.1,
 }
-
+# Define transforms for training data augmentation
 train_transform = transforms.Compose(
     [
         transforms.Resize(224),
@@ -60,7 +64,7 @@ val_test_transform = transforms.Compose(
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ]
 )
-
+# LitData Streaming from S3 (shards live in S3, cached locally)
 S3_BUCKET = os.getenv("S3_BUCKET", "rb-litdata-food11")
 LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
 LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", "/mnt/local/litdata_cache")
@@ -202,13 +206,17 @@ class LightningFood11Model(L.LightningModule):
         optimizer = optim.Adam(self.model.classifier.parameters(), lr=config["lr"])
         return optimizer
 
-
+### Lightning callbacks
+# Many of the things we hand-coded in Pytorch are available "out of the box" in Pytorch Lightning
+# - saving model when vaidation loss improves: use ModelCheckpoint
+# - early stopping: use EarlyStopping
+# - un-freeze backbone/base model after a few epochs, and continue training with a small learning rate: BackboneFinetuning
 checkpoint_callback = ModelCheckpoint(
-    dirpath="checkpoints/",
-    filename="food11",
-    monitor="val_loss",
-    mode="min",
-    save_top_k=1,
+    dirpath="checkpoints/", # where to save the model
+    filename="food11", # model name
+    monitor="val_loss", # watch validation loss
+    mode="min", # save the model with the lowest validation loss
+    save_top_k=1, # keep only the best model
 )
 
 early_stopping_callback = EarlyStopping(
@@ -219,10 +227,14 @@ early_stopping_callback = EarlyStopping(
 
 backbone_finetuning_callback = BackboneFinetuning(
     unfreeze_backbone_at_epoch=config["initial_epochs"],
-    backbone_initial_lr=config["fine_tune_lr"],
+    backbone_initial_lr=config["fine_tune_lr"], # Sets initial learning rate for finetuning
     should_align=True,
 )
 
+### Training loop
+# The training loop in "vanilla" Pytorch is completely replaced with a Lightning Trainer
+# it also includes baked-in support for distributed training across GPUs
+# we set devices="auto" and let it figure out by itself how many GPUs are available, and how to use them
 lightning_food11_model = LightningFood11Model()
 
 trainer = Trainer(
@@ -233,4 +245,4 @@ trainer = Trainer(
 )
 
 trainer.fit(lightning_food11_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
-trainer.test(lightning_food11_model, dataloaders=test_loader)
+trainer.test(lightning_food11_model, dataloaders=test_loader) ### Evaluate on test set
