@@ -1,0 +1,179 @@
+2026-02-04 00:27:03,277 - INFO - ================================================================================
+2026-02-04 00:27:03,277 - INFO - PYTORCH DIRECT S3 TRAINING
+2026-02-04 00:27:03,277 - INFO - ================================================================================
+2026-02-04 00:27:03,277 - INFO - Log file: logs/torch_s3/train_s3_20260204_002703.log
+2026-02-04 00:27:03,277 - INFO - Script started at: 2026-02-04 00:27:03
+2026-02-04 00:27:03,277 - INFO - ============================================================
+2026-02-04 00:27:03,277 - INFO - DATA LOADING CONFIGURATION
+2026-02-04 00:27:03,277 - INFO - ============================================================
+2026-02-04 00:27:03,277 - INFO - S3 Bucket: ansh-lab4-tests-bucket
+2026-02-04 00:27:03,278 - INFO - S3 Endpoint: https://chi.uc.chameleoncloud.org:7480
+2026-02-04 00:27:03,278 - INFO - Data loading: DIRECT FROM S3 (no filesystem mount)
+2026-02-04 00:27:03,278 - INFO - ============================================================
+2026-02-04 00:27:03,347 - INFO - Loading data directly from S3: s3://ansh-lab4-tests-bucket/training
+2026-02-04 00:27:04,445 - INFO - Dataset loaded from S3: 9866 images, 11 classes
+2026-02-04 00:27:04,449 - INFO - Loading data directly from S3: s3://ansh-lab4-tests-bucket/validation
+2026-02-04 00:27:04,854 - INFO - Dataset loaded from S3: 3430 images, 11 classes
+2026-02-04 00:27:04,858 - INFO - Loading data directly from S3: s3://ansh-lab4-tests-bucket/evaluation
+2026-02-04 00:27:05,391 - INFO - Dataset loaded from S3: 3347 images, 11 classes
+2026-02-04 00:27:05,792 - INFO - ============================================================
+2026-02-04 00:27:05,792 - INFO - MODEL CONFIGURATION
+2026-02-04 00:27:05,793 - INFO - ============================================================
+2026-02-04 00:27:05,793 - INFO - Model: MobileNetV2
+2026-02-04 00:27:05,793 - INFO - Device: cuda
+2026-02-04 00:27:05,793 - INFO - Batch size: 64
+2026-02-04 00:27:05,793 - INFO - Num workers: 8
+2026-02-04 00:27:05,793 - INFO - ============================================================
+2026-02-04 00:27:05,793 - INFO - INITIAL TRAINING PHASE - Classification head only
+2026-02-04 00:27:05,793 - INFO - Trainable parameters: 14,091
+2026-02-04 00:27:05,793 - INFO - Initial epochs: 5
+2026-02-04 00:27:05,794 - INFO - Learning rate: 0.0001
+2026-02-04 00:27:05,891 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_08/8_730.jpg (access #1)
+2026-02-04 00:27:05,891 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_06/6_119.jpg (access #1)
+2026-02-04 00:27:05,891 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_08/8_200.jpg (access #1)
+2026-02-04 00:27:05,891 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_04/4_92.jpg (access #1)
+2026-02-04 00:27:05,892 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_04/4_557.jpg (access #1)
+2026-02-04 00:27:05,893 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_02/2_1339.jpg (access #1)
+2026-02-04 00:27:05,893 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_05/5_857.jpg (access #1)
+2026-02-04 00:27:05,903 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_10/10_165.jpg (access #1)
+2026-02-04 00:27:05,927 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_08/8_760.jpg (access #2)
+2026-02-04 00:27:05,981 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_09/9_44.jpg (access #3)
+2026-02-04 00:27:05,981 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_05/5_988.jpg (access #2)
+2026-02-04 00:27:05,982 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_03/3_749.jpg (access #2)
+2026-02-04 00:27:05,982 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_08/8_202.jpg (access #2)
+2026-02-04 00:27:05,982 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_00/0_301.jpg (access #2)
+2026-02-04 00:27:05,988 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_00/0_519.jpg (access #2)
+2026-02-04 00:27:05,995 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_10/10_287.jpg (access #2)
+2026-02-04 00:27:05,995 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_04/4_726.jpg (access #3)
+2026-02-04 00:27:05,995 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_00/0_123.jpg (access #4)
+2026-02-04 00:27:05,995 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_00/0_154.jpg (access #3)
+2026-02-04 00:27:05,995 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_04/4_572.jpg (access #3)
+2026-02-04 00:27:05,996 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_03/3_310.jpg (access #3)
+2026-02-04 00:27:06,001 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_10/10_328.jpg (access #3)
+2026-02-04 00:27:06,008 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_02/2_1284.jpg (access #5)
+2026-02-04 00:27:06,008 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_09/9_1213.jpg (access #4)
+2026-02-04 00:27:06,008 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_02/2_1001.jpg (access #4)
+2026-02-04 00:27:06,009 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_00/0_164.jpg (access #4)
+2026-02-04 00:27:06,009 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_04/4_267.jpg (access #4)
+2026-02-04 00:27:06,010 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_10/10_275.jpg (access #3)
+2026-02-04 00:27:06,014 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_05/5_363.jpg (access #4)
+2026-02-04 00:27:06,021 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_02/2_1019.jpg (access #5)
+2026-02-04 00:27:06,021 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_08/8_335.jpg (access #5)
+2026-02-04 00:27:06,022 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_03/3_766.jpg (access #5)
+2026-02-04 00:27:06,022 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_02/2_510.jpg (access #5)
+2026-02-04 00:27:06,027 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_08/8_561.jpg (access #5)
+2026-02-04 00:27:06,034 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_09/9_351.jpg (access #4)
+2026-02-04 00:27:06,048 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_07/7_148.jpg (access #5)
+2026-02-04 00:27:06,113 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_09/9_3.jpg (access #2)
+2026-02-04 00:27:06,126 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_03/3_42.jpg (access #3)
+2026-02-04 00:27:06,138 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_00/0_654.jpg (access #4)
+2026-02-04 00:27:06,152 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_06/6_190.jpg (access #5)
+2026-02-04 00:27:24,325 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_0.jpg (access #1)
+2026-02-04 00:27:24,325 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_156.jpg (access #1)
+2026-02-04 00:27:24,326 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_271.jpg (access #1)
+2026-02-04 00:27:24,326 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_213.jpg (access #1)
+2026-02-04 00:27:24,330 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_329.jpg (access #1)
+2026-02-04 00:27:24,330 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_118.jpg (access #1)
+2026-02-04 00:27:24,330 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_61.jpg (access #1)
+2026-02-04 00:27:24,338 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_47.jpg (access #1)
+2026-02-04 00:27:24,409 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_1.jpg (access #2)
+2026-02-04 00:27:24,411 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_272.jpg (access #2)
+2026-02-04 00:27:24,417 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_10.jpg (access #3)
+2026-02-04 00:27:24,419 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_48.jpg (access #2)
+2026-02-04 00:27:24,419 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_273.jpg (access #3)
+2026-02-04 00:27:24,424 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_62.jpg (access #2)
+2026-02-04 00:27:24,425 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_100.jpg (access #4)
+2026-02-04 00:27:24,427 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_49.jpg (access #3)
+2026-02-04 00:27:24,428 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_33.jpg (access #2)
+2026-02-04 00:27:24,428 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_119.jpg (access #2)
+2026-02-04 00:27:24,433 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_63.jpg (access #3)
+2026-02-04 00:27:24,433 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_101.jpg (access #5)
+2026-02-04 00:27:24,434 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_157.jpg (access #2)
+2026-02-04 00:27:24,434 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_5.jpg (access #4)
+2026-02-04 00:27:24,436 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_330.jpg (access #3)
+2026-02-04 00:27:24,436 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_12.jpg (access #3)
+2026-02-04 00:27:24,441 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_64.jpg (access #4)
+2026-02-04 00:27:24,442 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_120.jpg (access #4)
+2026-02-04 00:27:24,442 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_274.jpg (access #4)
+2026-02-04 00:27:24,442 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_158.jpg (access #3)
+2026-02-04 00:27:24,442 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_50.jpg (access #5)
+2026-02-04 00:27:24,444 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_331.jpg (access #4)
+2026-02-04 00:27:24,449 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_65.jpg (access #5)
+2026-02-04 00:27:24,450 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_159.jpg (access #4)
+2026-02-04 00:27:24,452 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_332.jpg (access #5)
+2026-02-04 00:27:24,452 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_275.jpg (access #5)
+2026-02-04 00:27:24,458 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_16.jpg (access #5)
+2026-02-04 00:27:24,461 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_214.jpg (access #2)
+2026-02-04 00:27:24,470 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_215.jpg (access #3)
+2026-02-04 00:27:24,477 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_216.jpg (access #4)
+2026-02-04 00:27:24,484 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_01/1_121.jpg (access #5)
+2026-02-04 00:27:24,485 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/validation/class_00/0_217.jpg (access #5)
+2026-02-04 00:29:08,327 - INFO - FINE-TUNING PHASE - Entire model
+2026-02-04 00:29:08,328 - INFO - Trainable parameters: 2,237,963
+2026-02-04 00:29:08,328 - INFO - Fine-tune learning rate: 1e-05
+2026-02-04 00:29:08,328 - INFO - Total epochs: 20
+2026-02-04 00:30:11,504 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_10/10_164.jpg (access #10000)
+2026-02-04 00:30:11,881 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_00/0_249.jpg (access #10000)
+2026-02-04 00:30:24,383 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_08/8_760.jpg (access #10000)
+2026-02-04 00:30:25,026 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_05/5_139.jpg (access #10000)
+2026-02-04 00:30:25,137 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_02/2_1446.jpg (access #10000)
+2026-02-04 00:30:25,141 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_09/9_1041.jpg (access #10000)
+2026-02-04 00:30:25,297 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_04/4_772.jpg (access #10000)
+2026-02-04 00:30:25,665 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_08/8_564.jpg (access #10000)
+2026-02-04 00:33:23,672 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_01/1_154.jpg (access #20000)
+2026-02-04 00:33:24,211 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_02/2_1470.jpg (access #20000)
+2026-02-04 00:33:43,114 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_00/0_382.jpg (access #20000)
+2026-02-04 00:33:45,093 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_05/5_831.jpg (access #20000)
+2026-02-04 00:33:45,388 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_06/6_417.jpg (access #20000)
+2026-02-04 00:33:45,477 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_05/5_1167.jpg (access #20000)
+2026-02-04 00:33:45,517 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_02/2_904.jpg (access #20000)
+2026-02-04 00:33:46,367 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/training/class_10/10_358.jpg (access #20000)
+2026-02-04 00:35:16,019 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_213.jpg (access #1)
+2026-02-04 00:35:16,019 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_0.jpg (access #1)
+2026-02-04 00:35:16,019 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_156.jpg (access #1)
+2026-02-04 00:35:16,020 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_271.jpg (access #1)
+2026-02-04 00:35:16,021 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_329.jpg (access #1)
+2026-02-04 00:35:16,022 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_112.jpg (access #1)
+2026-02-04 00:35:16,022 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_56.jpg (access #1)
+2026-02-04 00:35:16,037 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_38.jpg (access #1)
+2026-02-04 00:35:16,100 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_214.jpg (access #2)
+2026-02-04 00:35:16,108 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_215.jpg (access #3)
+2026-02-04 00:35:16,112 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_1.jpg (access #2)
+2026-02-04 00:35:16,114 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_272.jpg (access #2)
+2026-02-04 00:35:16,114 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_33.jpg (access #2)
+2026-02-04 00:35:16,114 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_113.jpg (access #2)
+2026-02-04 00:35:16,115 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_157.jpg (access #2)
+2026-02-04 00:35:16,117 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_216.jpg (access #4)
+2026-02-04 00:35:16,122 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_273.jpg (access #3)
+2026-02-04 00:35:16,122 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_158.jpg (access #3)
+2026-02-04 00:35:16,122 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_330.jpg (access #3)
+2026-02-04 00:35:16,124 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_10.jpg (access #3)
+2026-02-04 00:35:16,127 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_114.jpg (access #3)
+2026-02-04 00:35:16,130 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_331.jpg (access #4)
+2026-02-04 00:35:16,130 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_274.jpg (access #4)
+2026-02-04 00:35:16,131 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_159.jpg (access #4)
+2026-02-04 00:35:16,132 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_100.jpg (access #4)
+2026-02-04 00:35:16,133 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_57.jpg (access #2)
+2026-02-04 00:35:16,136 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_115.jpg (access #4)
+2026-02-04 00:35:16,138 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_275.jpg (access #5)
+2026-02-04 00:35:16,139 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_332.jpg (access #5)
+2026-02-04 00:35:16,140 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_16.jpg (access #5)
+2026-02-04 00:35:16,140 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_101.jpg (access #5)
+2026-02-04 00:35:16,140 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_58.jpg (access #3)
+2026-02-04 00:35:16,144 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_116.jpg (access #5)
+2026-02-04 00:35:16,144 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_217.jpg (access #5)
+2026-02-04 00:35:16,148 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_59.jpg (access #4)
+2026-02-04 00:35:16,157 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_00/0_6.jpg (access #5)
+2026-02-04 00:35:16,168 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_39.jpg (access #2)
+2026-02-04 00:35:16,176 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_4.jpg (access #3)
+2026-02-04 00:35:16,349 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_40.jpg (access #4)
+2026-02-04 00:35:16,361 - INFO - Reading image directly from S3: s3://ansh-lab4-tests-bucket/evaluation/class_01/1_41.jpg (access #5)
+2026-02-04 00:35:22,498 - INFO - ============================================================
+2026-02-04 00:35:22,498 - INFO - FINAL RESULTS
+2026-02-04 00:35:22,498 - INFO - ============================================================
+2026-02-04 00:35:22,498 - INFO - Test Loss: 0.4049
+2026-02-04 00:35:22,498 - INFO - Test Accuracy: 0.88%
+2026-02-04 00:35:22,498 - INFO - Total execution time: 499.22 seconds (8.32 minutes)
+2026-02-04 00:35:22,498 - INFO - Script completed at: 2026-02-04 00:35:22
+2026-02-04 00:35:22,498 - INFO - Training completed - Data loaded directly from S3
+2026-02-04 00:35:22,498 - INFO - ============================================================
