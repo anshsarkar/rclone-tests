@@ -8,7 +8,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import models, transforms
 
-### New imports for Lightning
 import lightning as L
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, BackboneFinetuning
@@ -21,12 +20,10 @@ from litdata import StreamingDataset
 # --- surgical additions ---
 from urllib.parse import urlparse
 import boto3
-
-_DEBUG_ONCE = {"done": False}
+from botocore.config import Config
 # --- end additions ---
 
 
-### Configure the training job
 config = {
     "initial_epochs": 5,
     "total_epochs": 20,
@@ -44,11 +41,14 @@ config = {
     "color_jitter_hue": 0.1,
 }
 
-DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", "0"))
+# --- surgical change: better defaults, still env-overridable ---
+DEFAULT_WORKERS = max(2, min(8, (os.cpu_count() or 8) // 2))
+DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", str(DEFAULT_WORKERS)))
 PERSISTENT_WORKERS = DATALOADER_WORKERS > 0
-PREFETCH_FACTOR = 2 if DATALOADER_WORKERS > 0 else None
+PREFETCH_FACTOR = int(os.getenv("PREFETCH_FACTOR", "4")) if DATALOADER_WORKERS > 0 else None
+# --- end change ---
 
-# Define transforms for training data augmentation
+
 train_transform = transforms.Compose(
     [
         transforms.Resize(224),
@@ -75,11 +75,16 @@ val_test_transform = transforms.Compose(
     ]
 )
 
-# LitData Streaming from S3 (shards live in S3, cached locally)
 S3_BUCKET = os.getenv("S3_BUCKET", "rb-litdata-food11")
 LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
-LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", "/mnt/local/litdata_cache")
+
+# --- surgical change: safe default cache dir ---
+LITDATA_CACHE_DIR = os.getenv(
+    "LITDATA_CACHE_DIR",
+    os.path.join(os.path.expanduser("~"), "litdata_cache"),
+)
 os.makedirs(LITDATA_CACHE_DIR, exist_ok=True)
+# --- end change ---
 
 TRAIN_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/training"
 VAL_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/validation"
@@ -96,14 +101,16 @@ if not (S3_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
         "(and optionally AWS_DEFAULT_REGION)."
     )
 
-STORAGE_OPTIONS = {"endpoint_url": S3_ENDPOINT_URL}
+# --- surgical change: path-style addressing for Chameleon RGW ---
+STORAGE_OPTIONS = {"endpoint_url": S3_ENDPOINT_URL, "addressing_style": "path"}
 SESSION_OPTIONS = {
     "aws_access_key_id": AWS_ACCESS_KEY_ID,
     "aws_secret_access_key": AWS_SECRET_ACCESS_KEY,
     "region_name": AWS_DEFAULT_REGION,
 }
+BOTO_CFG = Config(signature_version="s3v4", s3={"addressing_style": "path"})
+# --- end change ---
 
-# --- surgical additions ---
 def _s3_prefix_exists(url: str, max_keys: int = 1) -> None:
     u = urlparse(url)
     bucket = u.netloc
@@ -114,6 +121,7 @@ def _s3_prefix_exists(url: str, max_keys: int = 1) -> None:
         aws_access_key_id=AWS_ACCESS_KEY_ID,
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         region_name=AWS_DEFAULT_REGION,
+        config=BOTO_CFG,  # --- surgical change ---
     )
     resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=max_keys)
     if "Contents" not in resp or not resp["Contents"]:
@@ -123,17 +131,23 @@ def _s3_prefix_exists(url: str, max_keys: int = 1) -> None:
 _s3_prefix_exists(TRAIN_URL)
 _s3_prefix_exists(VAL_URL)
 _s3_prefix_exists(TEST_URL)
-# --- end additions ---
 
+
+# --- surgical addition: debug print only once per process group ---
+_PRINT_ONCE = {"done": False}
+# --- end addition ---
 
 def decode_litdata_sample(sample, transform):
     img_bytes = sample["image"]
     label = int(sample["label"])
-    # --- surgical additions ---
-    if not _DEBUG_ONCE["done"]:
+
+    # --- surgical change: avoid 1 print per worker ---
+    if (not _PRINT_ONCE["done"]) and (os.getenv("LOCAL_RANK", "0") == "0"):
+        # in dataloader worker processes, this env var is not always set; keep it simple
         print(f"[litdata] first_sample: keys={list(sample.keys())} label={label} bytes={len(img_bytes)}")
-        _DEBUG_ONCE["done"] = True
-    # --- end additions ---
+        _PRINT_ONCE["done"] = True
+    # --- end change ---
+
     image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
     if transform:
         image = transform(image)
@@ -146,14 +160,17 @@ class LitDataFood11(torch.utils.data.Dataset):
         cache_dir = os.path.join(LITDATA_CACHE_DIR, split_name)
         os.makedirs(cache_dir, exist_ok=True)
 
+        # --- surgical change: configurable predownload ---
+        MAX_PRE_DOWNLOAD = int(os.getenv("LITDATA_MAX_PRE_DOWNLOAD", "128"))
         self.ds = StreamingDataset(
             input_dir=input_url,
             cache_dir=cache_dir,
             shuffle=shuffle,
-            max_pre_download=16,  # was 4
+            max_pre_download=MAX_PRE_DOWNLOAD,
             storage_options=STORAGE_OPTIONS,
             session_options=SESSION_OPTIONS,
         )
+        # --- end change ---
 
         print(f"[litdata] split={split_name} input={input_url} cache_dir={cache_dir} shuffle={shuffle}")
 
@@ -273,7 +290,7 @@ trainer = Trainer(
     max_epochs=config["total_epochs"],
     accelerator="auto",
     devices="auto",
-    num_sanity_val_steps=0,  # --- surgical addition ---
+    num_sanity_val_steps=0,
     callbacks=[checkpoint_callback, early_stopping_callback, backbone_finetuning_callback],
 )
 
