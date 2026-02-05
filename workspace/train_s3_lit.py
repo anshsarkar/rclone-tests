@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import lightning as L
-
+os.environ["LITDATA_DISABLE_INDEX_CHECK"] = "1"
 from PIL import Image
 from torchvision import models, transforms
 from lightning import Trainer
