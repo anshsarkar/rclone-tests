@@ -111,54 +111,70 @@ def decode_litdata_sample(sample, transform):
         image = transform(image)
     return image, label
 
-
-class LitDataFood11(torch.utils.data.Dataset):
-    def __init__(self, input_url: str, split_name: str, transform, shuffle: bool):
-        self.transform = transform
-        cache_dir = os.path.join(LITDATA_CACHE_DIR, split_name)
-        os.makedirs(cache_dir, exist_ok=True)
-
-        self.ds = StreamingDataset(
-            input_dir=input_url,
-            cache_dir=LITDATA_CACHE_DIR,
-            shuffle=shuffle,
-            max_pre_download=MAX_PRE_DOWNLOAD,
-            storage_options=STORAGE_OPTIONS,
-            session_options=SESSION_OPTIONS,
-        )
-
-    def __len__(self):
-        return len(self.ds)
-
-    def __getitem__(self, idx):
-        return decode_litdata_sample(self.ds[idx], self.transform)
+def make_collate(transform):
+    def _collate(batch):
+        xs, ys = zip(*(decode_litdata_sample(s, transform) for s in batch))
+        return torch.stack(xs, 0), torch.tensor(ys, dtype=torch.long)
+    return _collate
 
 
-train_dataset = LitDataFood11(TRAIN_URL, "training", train_transform, shuffle=True)
-val_dataset = LitDataFood11(VAL_URL, "validation", val_test_transform, shuffle=False)
-test_dataset = LitDataFood11(TEST_URL, "evaluation", val_test_transform, shuffle=False)
+
+train_dataset = StreamingDataset(
+    input_dir=TRAIN_URL,
+    cache_dir=LITDATA_CACHE_DIR,
+    shuffle=True,
+    max_pre_download=MAX_PRE_DOWNLOAD,
+    storage_options=STORAGE_OPTIONS,
+    session_options=SESSION_OPTIONS,
+)
+
+val_dataset = StreamingDataset(
+    input_dir=VAL_URL,
+    cache_dir=LITDATA_CACHE_DIR,
+    shuffle=False,
+    max_pre_download=MAX_PRE_DOWNLOAD,
+    storage_options=STORAGE_OPTIONS,
+    session_options=SESSION_OPTIONS,
+)
+
+test_dataset = StreamingDataset(
+    input_dir=TEST_URL,
+    cache_dir=LITDATA_CACHE_DIR,
+    shuffle=False,
+    max_pre_download=MAX_PRE_DOWNLOAD,
+    storage_options=STORAGE_OPTIONS,
+    session_options=SESSION_OPTIONS,
+)
+
+
 
 train_loader = StreamingDataLoader(
     train_dataset,
     batch_size=config["batch_size"],
     num_workers=DATALOADER_WORKERS,
     shuffle=True,
+    collate_fn=make_collate(train_transform),
     **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
 )
+
 val_loader = StreamingDataLoader(
     val_dataset,
     batch_size=config["batch_size"],
     num_workers=DATALOADER_WORKERS,
     shuffle=False,
+    collate_fn=make_collate(val_test_transform),
     **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
 )
+
 test_loader = StreamingDataLoader(
     test_dataset,
     batch_size=config["batch_size"],
     num_workers=DATALOADER_WORKERS,
     shuffle=False,
+    collate_fn=make_collate(val_test_transform),
     **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
 )
+
 
 
 
