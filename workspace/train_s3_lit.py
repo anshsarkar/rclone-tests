@@ -10,13 +10,14 @@ import lightning as L
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 
+from litdata import StreamingDataset
 from litdata.streaming import StreamingDataLoader
 
 torch.set_float32_matmul_precision("medium")
 
 
 config = {
-    "total_epochs": 20,   
+    "total_epochs": 20,  
     "patience": 5,
     "batch_size": int(os.getenv("BATCH_SIZE", "32")),
     "lr": 1e-4,
@@ -69,36 +70,52 @@ def make_collate(transform):
     return _collate
 
 
-train_loader = StreamingDataLoader(
+train_ds = StreamingDataset(
     input_dir=TRAIN_URL,
     cache_dir=LITDATA_CACHE_DIR,
+    shuffle=True,
+    max_pre_download=MAX_PRE_DOWNLOAD,
+)
+
+val_ds = StreamingDataset(
+    input_dir=VAL_URL,
+    cache_dir=LITDATA_CACHE_DIR,
+    shuffle=False,
+    max_pre_download=MAX_PRE_DOWNLOAD,
+)
+
+test_ds = StreamingDataset(
+    input_dir=TEST_URL,
+    cache_dir=LITDATA_CACHE_DIR,
+    shuffle=False,
+    max_pre_download=MAX_PRE_DOWNLOAD,
+)
+
+
+train_loader = StreamingDataLoader(
+    train_ds,
     batch_size=config["batch_size"],
     shuffle=True,
     num_workers=DATALOADER_WORKERS,
     collate_fn=make_collate(train_transform),
-    max_pre_download=MAX_PRE_DOWNLOAD,
     **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
 )
 
 val_loader = StreamingDataLoader(
-    input_dir=VAL_URL,
-    cache_dir=LITDATA_CACHE_DIR,
+    val_ds,
     batch_size=config["batch_size"],
     shuffle=False,
     num_workers=DATALOADER_WORKERS,
     collate_fn=make_collate(val_transform),
-    max_pre_download=MAX_PRE_DOWNLOAD,
     **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
 )
 
 test_loader = StreamingDataLoader(
-    input_dir=TEST_URL,
-    cache_dir=LITDATA_CACHE_DIR,
+    test_ds,
     batch_size=config["batch_size"],
     shuffle=False,
     num_workers=DATALOADER_WORKERS,
     collate_fn=make_collate(val_transform),
-    max_pre_download=MAX_PRE_DOWNLOAD,
     **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
 )
 
