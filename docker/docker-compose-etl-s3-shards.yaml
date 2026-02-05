@@ -190,6 +190,8 @@ services:
           pip install --no-cache-dir litdata 
           
           echo "Starting litdata sharding process..."
+          echo "Cleaning up existing sharded data..."
+          rm -rf /data/litdata-shards
           mkdir -p /data/litdata-shards
           
           # Create sharding script
