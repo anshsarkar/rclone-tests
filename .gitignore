@@ -209,3 +209,4 @@ __marimo__/
 .DS_Store
 workspace/lit_local.py
 workspace/lit_local_1.py
+workspace/train_s3_aggr.py

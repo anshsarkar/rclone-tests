@@ -21,7 +21,7 @@ config = {
     "initial_epochs": 5,
     "total_epochs": 20,
     "patience": 5,
-    "batch_size": int(os.getenv("BATCH_SIZE", "32")),
+    "batch_size": int(os.getenv("BATCH_SIZE", "64")),
     "lr": 1e-4,
     "model_architecture": "MobileNetV2",
     "dropout_probability": 0.5,
@@ -57,9 +57,9 @@ val_test_transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225]),
 ])
 
-S3_BUCKET = os.getenv("S3_BUCKET", "rb-litdata-food11")
-LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
-LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", "/tmp/litdata_cache")
+S3_BUCKET = os.getenv("S3_BUCKET", "ansh-lab4-tests-bucket")
+LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "optimized-dataset")
+LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", "./litdata_cache")
 os.makedirs(LITDATA_CACHE_DIR, exist_ok=True)
 
 TRAIN_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/training"
@@ -68,14 +68,14 @@ TEST_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/evaluation"
 
 STORAGE_OPTIONS = {"endpoint_url": os.environ["S3_ENDPOINT_URL"]}
 SESSION_OPTIONS = {
-    "aws_access_key_id": os.environ["AWS_ACCESS_KEY_ID"],
-    "aws_secret_access_key": os.environ["AWS_SECRET_ACCESS_KEY"],
-    "region_name": os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+    "aws_access_key_id": os.environ["ACCESS_KEY_ID"],
+    "aws_secret_access_key": os.environ["SECRET_ACCESS_KEY"],
+    # "region_name": os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
 }
 
-DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", "0"))
-PREFETCH_FACTOR = int(os.getenv("PREFETCH_FACTOR", "2")) if DATALOADER_WORKERS > 0 else None
-MAX_PRE_DOWNLOAD = int(os.getenv("LITDATA_MAX_PRE_DOWNLOAD", "16"))
+DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", "32"))
+PREFETCH_FACTOR = int(os.getenv("PREFETCH_FACTOR", "128")) if DATALOADER_WORKERS > 0 else None
+MAX_PRE_DOWNLOAD = int(os.getenv("LITDATA_MAX_PRE_DOWNLOAD", "128"))
 
 def decode_litdata_sample(sample, transform):
     img = Image.open(io.BytesIO(sample["image"])).convert("RGB")
@@ -181,6 +181,15 @@ class LightningFood11Model(L.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
         self.log("val_acc", acc, prog_bar=True)
 
+    def test_step(self, batch, _):
+        x, y = batch
+        out = self(x)
+        loss = self.criterion(out, y)
+        acc = (out.argmax(1) == y).float().mean()
+        self.log("test_loss", loss)
+        self.log("test_acc", acc)
+        return loss
+
     def configure_optimizers(self):
         return optim.Adam(self.model.classifier.parameters(), lr=config["lr"])
 
@@ -201,7 +210,7 @@ early_stopping_callback = EarlyStopping(
 model = LightningFood11Model()
 
 trainer = Trainer(
-    max_epochs=config["total_epochs"],
+    max_epochs=config["initial_epochs"],
     accelerator="gpu",
     devices="auto",
     num_sanity_val_steps=0,
