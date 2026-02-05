@@ -25,7 +25,7 @@ config = {
     "initial_epochs": 5,
     "total_epochs": 20,
     "patience": 5,
-    "batch_size": 32,
+    "batch_size":128,
     "lr": 1e-4,
     "fine_tune_lr": 1e-6,
     "model_architecture": "MobileNetV2",
