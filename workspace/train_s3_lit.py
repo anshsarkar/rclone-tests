@@ -74,7 +74,7 @@ train_ds = StreamingDataset(
     max_pre_download=MAX_PRE_DOWNLOAD,
     storage_options=STORAGE_OPTIONS,
     session_options=SESSION_OPTIONS,
-    use_index=False
+    
 )
 
 val_ds = StreamingDataset(
@@ -82,7 +82,7 @@ val_ds = StreamingDataset(
     max_pre_download=MAX_PRE_DOWNLOAD,
     storage_options=STORAGE_OPTIONS,
     session_options=SESSION_OPTIONS,
-    use_index=False
+   
 )
 
 test_ds = StreamingDataset(
@@ -90,7 +90,7 @@ test_ds = StreamingDataset(
     max_pre_download=MAX_PRE_DOWNLOAD,
     storage_options=STORAGE_OPTIONS,
     session_options=SESSION_OPTIONS,
-    use_index=False
+    
 )
 
 train_loader = StreamingDataLoader(
