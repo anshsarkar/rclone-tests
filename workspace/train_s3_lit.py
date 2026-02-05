@@ -5,7 +5,7 @@ import subprocess
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from litdata.streaming import StreamingDataLoader
 from torchvision import models, transforms
 
 ### New imports for Lightning
@@ -25,7 +25,7 @@ config = {
     "initial_epochs": 5,
     "total_epochs": 20,
     "patience": 5,
-    "batch_size":128,
+    "batch_size":int(os.getenv("BATCH_SIZE", "32")),
     "lr": 1e-4,
     "fine_tune_lr": 1e-6,
     "model_architecture": "MobileNetV2",
@@ -81,6 +81,8 @@ AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
 AWS_DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 
+LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", "/tmp/litdata_cache")
+
 if not (S3_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
     raise RuntimeError(
         "Missing S3 env vars. Set: S3_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY "
@@ -118,7 +120,7 @@ class LitDataFood11(torch.utils.data.Dataset):
 
         self.ds = StreamingDataset(
             input_dir=input_url,
-            cache_dir=cache_dir,
+            cache_dir=LITDATA_CACHE_DIR,
             shuffle=shuffle,
             max_pre_download=MAX_PRE_DOWNLOAD,
             storage_options=STORAGE_OPTIONS,
@@ -136,33 +138,28 @@ train_dataset = LitDataFood11(TRAIN_URL, "training", train_transform, shuffle=Tr
 val_dataset = LitDataFood11(VAL_URL, "validation", val_test_transform, shuffle=False)
 test_dataset = LitDataFood11(TEST_URL, "evaluation", val_test_transform, shuffle=False)
 
-train_loader = DataLoader(
+train_loader = StreamingDataLoader(
     train_dataset,
     batch_size=config["batch_size"],
-    shuffle=False,
     num_workers=DATALOADER_WORKERS,
-    pin_memory=True,
-    persistent_workers=PERSISTENT_WORKERS,
+    shuffle=True,
     **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
 )
-val_loader = DataLoader(
+val_loader = StreamingDataLoader(
     val_dataset,
     batch_size=config["batch_size"],
-    shuffle=False,
     num_workers=DATALOADER_WORKERS,
-    pin_memory=True,
-    persistent_workers=PERSISTENT_WORKERS,
+    shuffle=False,
     **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
 )
-test_loader = DataLoader(
+test_loader = StreamingDataLoader(
     test_dataset,
     batch_size=config["batch_size"],
-    shuffle=False,
     num_workers=DATALOADER_WORKERS,
-    pin_memory=True,
-    persistent_workers=PERSISTENT_WORKERS,
+    shuffle=False,
     **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
 )
+
 
 
 class LightningFood11Model(L.LightningModule):
