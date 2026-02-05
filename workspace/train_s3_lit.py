@@ -18,6 +18,13 @@ import io
 from PIL import Image
 from litdata import StreamingDataset
 
+# --- surgical additions ---
+from urllib.parse import urlparse
+import boto3
+
+_DEBUG_ONCE = {"done": False}
+# --- end additions ---
+
 
 ### Configure the training job
 config = {
@@ -37,7 +44,7 @@ config = {
     "color_jitter_hue": 0.1,
 }
 
-DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", "0")) 
+DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", "0"))
 PERSISTENT_WORKERS = DATALOADER_WORKERS > 0
 PREFETCH_FACTOR = 2 if DATALOADER_WORKERS > 0 else None
 
@@ -96,10 +103,37 @@ SESSION_OPTIONS = {
     "region_name": AWS_DEFAULT_REGION,
 }
 
+# --- surgical additions ---
+def _s3_prefix_exists(url: str, max_keys: int = 1) -> None:
+    u = urlparse(url)
+    bucket = u.netloc
+    prefix = u.path.lstrip("/") + "/"
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=S3_ENDPOINT_URL,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_DEFAULT_REGION,
+    )
+    resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=max_keys)
+    if "Contents" not in resp or not resp["Contents"]:
+        raise RuntimeError(f"No objects found under s3://{bucket}/{prefix} (check bucket/prefix/creds).")
+    print(f"[litdata] S3 OK: s3://{bucket}/{prefix}")
+
+_s3_prefix_exists(TRAIN_URL)
+_s3_prefix_exists(VAL_URL)
+_s3_prefix_exists(TEST_URL)
+# --- end additions ---
+
 
 def decode_litdata_sample(sample, transform):
     img_bytes = sample["image"]
     label = int(sample["label"])
+    # --- surgical additions ---
+    if not _DEBUG_ONCE["done"]:
+        print(f"[litdata] first_sample: keys={list(sample.keys())} label={label} bytes={len(img_bytes)}")
+        _DEBUG_ONCE["done"] = True
+    # --- end additions ---
     image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
     if transform:
         image = transform(image)
@@ -112,7 +146,6 @@ class LitDataFood11(torch.utils.data.Dataset):
         cache_dir = os.path.join(LITDATA_CACHE_DIR, split_name)
         os.makedirs(cache_dir, exist_ok=True)
 
-        
         self.ds = StreamingDataset(
             input_dir=input_url,
             cache_dir=cache_dir,
@@ -121,10 +154,8 @@ class LitDataFood11(torch.utils.data.Dataset):
             storage_options=STORAGE_OPTIONS,
             session_options=SESSION_OPTIONS,
         )
-       
 
         print(f"[litdata] split={split_name} input={input_url} cache_dir={cache_dir} shuffle={shuffle}")
-        
 
     def __len__(self):
         return len(self.ds)
@@ -242,6 +273,7 @@ trainer = Trainer(
     max_epochs=config["total_epochs"],
     accelerator="auto",
     devices="auto",
+    num_sanity_val_steps=0,  # --- surgical addition ---
     callbacks=[checkpoint_callback, early_stopping_callback, backbone_finetuning_callback],
 )
 
