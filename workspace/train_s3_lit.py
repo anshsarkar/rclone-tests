@@ -8,9 +8,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import models, transforms
 
+### New imports for Lightning
 import lightning as L
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, BackboneFinetuning
+
 torch.set_float32_matmul_precision("medium")
 
 import io
@@ -23,7 +25,9 @@ import boto3
 from botocore.config import Config
 # --- end additions ---
 
+_DEBUG_ONCE = {"done": False}
 
+### Configure the training job
 config = {
     "initial_epochs": 5,
     "total_epochs": 20,
@@ -41,14 +45,15 @@ config = {
     "color_jitter_hue": 0.1,
 }
 
-# --- surgical change: better defaults, still env-overridable ---
-DEFAULT_WORKERS = max(2, min(8, (os.cpu_count() or 8) // 2))
-DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", str(DEFAULT_WORKERS)))
+# Dataloader perf knobs (env-overridable)
+DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", "0"))
 PERSISTENT_WORKERS = DATALOADER_WORKERS > 0
-PREFETCH_FACTOR = int(os.getenv("PREFETCH_FACTOR", "4")) if DATALOADER_WORKERS > 0 else None
-# --- end change ---
+PREFETCH_FACTOR = int(os.getenv("PREFETCH_FACTOR", "2")) if DATALOADER_WORKERS > 0 else None
 
+# LitData perf knob (env-overridable)
+MAX_PRE_DOWNLOAD = int(os.getenv("LITDATA_MAX_PRE_DOWNLOAD", "16"))
 
+# Define transforms for training data augmentation
 train_transform = transforms.Compose(
     [
         transforms.Resize(224),
@@ -75,16 +80,13 @@ val_test_transform = transforms.Compose(
     ]
 )
 
+# LitData Streaming from S3 (shards live in S3, cached locally)
 S3_BUCKET = os.getenv("S3_BUCKET", "rb-litdata-food11")
 LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
 
-# --- surgical change: safe default cache dir ---
-LITDATA_CACHE_DIR = os.getenv(
-    "LITDATA_CACHE_DIR",
-    os.path.join(os.path.expanduser("~"), "litdata_cache"),
-)
+# IMPORTANT: safe default cache dir (avoids /mnt/local permission issues)
+LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", os.path.join(os.path.expanduser("~"), "litdata_cache"))
 os.makedirs(LITDATA_CACHE_DIR, exist_ok=True)
-# --- end change ---
 
 TRAIN_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/training"
 VAL_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/validation"
@@ -101,16 +103,22 @@ if not (S3_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
         "(and optionally AWS_DEFAULT_REGION)."
     )
 
-# --- surgical change: path-style addressing for Chameleon RGW ---
-STORAGE_OPTIONS = {"endpoint_url": S3_ENDPOINT_URL, "addressing_style": "path"}
+# --- surgical change: DO NOT pass addressing_style in storage_options (litdata/boto3 Session.client doesn't accept it) ---
+STORAGE_OPTIONS = {"endpoint_url": S3_ENDPOINT_URL}
+
+# Use botocore Config to force path-style addressing for RGW (Chameleon)
+BOTO_CFG = Config(signature_version="s3v4", s3={"addressing_style": "path"})
+
 SESSION_OPTIONS = {
     "aws_access_key_id": AWS_ACCESS_KEY_ID,
     "aws_secret_access_key": AWS_SECRET_ACCESS_KEY,
     "region_name": AWS_DEFAULT_REGION,
+    "config": BOTO_CFG,  # <-- supported way
 }
-BOTO_CFG = Config(signature_version="s3v4", s3={"addressing_style": "path"})
 # --- end change ---
 
+
+# --- surgical additions ---
 def _s3_prefix_exists(url: str, max_keys: int = 1) -> None:
     u = urlparse(url)
     bucket = u.netloc
@@ -121,32 +129,28 @@ def _s3_prefix_exists(url: str, max_keys: int = 1) -> None:
         aws_access_key_id=AWS_ACCESS_KEY_ID,
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         region_name=AWS_DEFAULT_REGION,
-        config=BOTO_CFG,  # --- surgical change ---
+        config=BOTO_CFG,  # <-- keep consistent with session_options
     )
     resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=max_keys)
     if "Contents" not in resp or not resp["Contents"]:
         raise RuntimeError(f"No objects found under s3://{bucket}/{prefix} (check bucket/prefix/creds).")
     print(f"[litdata] S3 OK: s3://{bucket}/{prefix}")
 
+
 _s3_prefix_exists(TRAIN_URL)
 _s3_prefix_exists(VAL_URL)
 _s3_prefix_exists(TEST_URL)
+# --- end additions ---
 
-
-# --- surgical addition: debug print only once per process group ---
-_PRINT_ONCE = {"done": False}
-# --- end addition ---
 
 def decode_litdata_sample(sample, transform):
     img_bytes = sample["image"]
     label = int(sample["label"])
 
-    # --- surgical change: avoid 1 print per worker ---
-    if (not _PRINT_ONCE["done"]) and (os.getenv("LOCAL_RANK", "0") == "0"):
-        # in dataloader worker processes, this env var is not always set; keep it simple
+    # NOTE: with num_workers>0, each worker is a different process, so you'll see this once per worker.
+    if not _DEBUG_ONCE["done"]:
         print(f"[litdata] first_sample: keys={list(sample.keys())} label={label} bytes={len(img_bytes)}")
-        _PRINT_ONCE["done"] = True
-    # --- end change ---
+        _DEBUG_ONCE["done"] = True
 
     image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
     if transform:
@@ -160,8 +164,6 @@ class LitDataFood11(torch.utils.data.Dataset):
         cache_dir = os.path.join(LITDATA_CACHE_DIR, split_name)
         os.makedirs(cache_dir, exist_ok=True)
 
-        # --- surgical change: configurable predownload ---
-        MAX_PRE_DOWNLOAD = int(os.getenv("LITDATA_MAX_PRE_DOWNLOAD", "128"))
         self.ds = StreamingDataset(
             input_dir=input_url,
             cache_dir=cache_dir,
@@ -170,7 +172,6 @@ class LitDataFood11(torch.utils.data.Dataset):
             storage_options=STORAGE_OPTIONS,
             session_options=SESSION_OPTIONS,
         )
-        # --- end change ---
 
         print(f"[litdata] split={split_name} input={input_url} cache_dir={cache_dir} shuffle={shuffle}")
 
@@ -188,7 +189,7 @@ test_dataset = LitDataFood11(TEST_URL, "evaluation", val_test_transform, shuffle
 train_loader = DataLoader(
     train_dataset,
     batch_size=config["batch_size"],
-    shuffle=False,
+    shuffle=False,  # shuffle is handled by StreamingDataset when shuffle=True
     num_workers=DATALOADER_WORKERS,
     pin_memory=True,
     persistent_workers=PERSISTENT_WORKERS,
