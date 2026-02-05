@@ -275,8 +275,100 @@ RESULTS_CSV = 'multiple_benchmark_results.csv'
 # ]
 
 BENCHMARK_CONFIGURATIONS = [
+    # {
+    #     'run_id': 'rclone_aggressive_workers12',
+    #     'description': 'Aggressive rclone settings, 12 workers',
+    #     'rclone_remote': 'rclone_s3',
+    #     'rclone_container': 'ansh-lab4-tests-bucket',
+    #     'rclone_options': {
+    #         'vfs_cache_mode': 'full',
+    #         'vfs_cache_max_size': '50G',
+    #         'vfs_cache_max_age': '8h',
+    #         'vfs_read_chunk_size': '512M',
+    #         'vfs_read_chunk_size_limit': 'off',
+    #         'vfs_read_ahead': '4G',
+    #         'buffer_size': '1G',
+    #         'transfers': '48',
+    #         'checkers': '24',
+    #         'dir_cache_time': '2h',
+    #         'attr_timeout': '60s',
+    #         'low_level_retries': '15',
+    #         'retries': '5',
+    #         'contimeout': '60s',
+    #         'timeout': '300s',
+    #     },
+    #     'dataloader_options': {
+    #         'batch_size': 64,
+    #         'num_workers': 8,
+    #         'prefetch_factor': 4,
+    #         'pin_memory': True,
+    #     },
+    #     'epochs': 5
+    # }
+
+    # {
+    #     'run_id': 'rclone_aggressive_workers12_1',
+    #     'description': 'Aggressive rclone settings, 12 workers',
+    #     'rclone_remote': 'chi_uc',
+    #     'rclone_container': 'ansh-lab4-tests-bucket',
+    #     'rclone_options': {
+    #         'vfs_cache_mode': 'full',
+    #         'vfs_cache_max_size': '50G',
+    #         'vfs_cache_max_age': '8h',
+    #         'vfs_read_chunk_size': '512M',
+    #         'vfs_read_chunk_size_limit': 'off',
+    #         'vfs_read_ahead': '4G',
+    #         'buffer_size': '1G',
+    #         'transfers': '48',
+    #         'checkers': '24',
+    #         'dir_cache_time': '2h',
+    #         'attr_timeout': '60s',
+    #         'low_level_retries': '15',
+    #         'retries': '5',
+    #         'contimeout': '60s',
+    #         'timeout': '300s',
+    #     },
+    #     'dataloader_options': {
+    #         'batch_size': 64,
+    #         'num_workers': 32,
+    #         'prefetch_factor': 128,
+    #         'pin_memory': True,
+    #     },
+    #     'epochs': 5
+    # }
+
+    # {
+    #     'run_id': 'rclone_aggressive_workers12_2',
+    #     'description': 'Aggressive rclone settings, 12 workers',
+    #     'rclone_remote': 'rclone_s3',
+    #     'rclone_container': 'ansh-lab4-tests-bucket',
+    #     'rclone_options': {
+    #         'vfs_cache_mode': 'full',
+    #         'vfs_cache_max_size': '50G',
+    #         'vfs_cache_max_age': '8h',
+    #         'vfs_read_chunk_size': '4M',
+    #         'vfs_read_chunk_size_limit': 'off',
+    #         'vfs_read_ahead': '128M',
+    #         'buffer_size': '32M',
+    #         'transfers': '256',
+    #         'checkers': '48',
+    #         'dir_cache_time': '2h',
+    #         'attr_timeout': '60s',
+    #         'low_level_retries': '15',
+    #         'retries': '5',
+    #         'contimeout': '60s',
+    #         'timeout': '300s',
+    #     },
+    #     'dataloader_options': {
+    #         'batch_size': 64,
+    #         'num_workers': 48,
+    #         'prefetch_factor': 256,
+    #         'pin_memory': True,
+    #     },
+    #     'epochs': 5
+    # }
     {
-        'run_id': 'rclone_aggressive_workers12',
+        'run_id': 'rclone_aggressive_workers12_1',
         'description': 'Aggressive rclone settings, 12 workers',
         'rclone_remote': 'rclone_s3',
         'rclone_container': 'ansh-lab4-tests-bucket',
@@ -284,12 +376,12 @@ BENCHMARK_CONFIGURATIONS = [
             'vfs_cache_mode': 'full',
             'vfs_cache_max_size': '50G',
             'vfs_cache_max_age': '8h',
-            'vfs_read_chunk_size': '512M',
+            'vfs_read_chunk_size': '4M',
             'vfs_read_chunk_size_limit': 'off',
-            'vfs_read_ahead': '4G',
-            'buffer_size': '1G',
-            'transfers': '48',
-            'checkers': '24',
+            'vfs_read_ahead': '128M',
+            'buffer_size': '32M',
+            'transfers': '128',
+            'checkers': '48',
             'dir_cache_time': '2h',
             'attr_timeout': '60s',
             'low_level_retries': '15',
@@ -299,8 +391,8 @@ BENCHMARK_CONFIGURATIONS = [
         },
         'dataloader_options': {
             'batch_size': 64,
-            'num_workers': 8,
-            'prefetch_factor': 4,
+            'num_workers': 96,
+            'prefetch_factor': 128,
             'pin_memory': True,
         },
         'epochs': 5
