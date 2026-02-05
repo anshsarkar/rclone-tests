@@ -12,20 +12,13 @@ from torchvision import models, transforms
 import lightning as L
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, BackboneFinetuning
-
 torch.set_float32_matmul_precision("medium")
 
+# --- surgical additions (LitData streaming from S3) ---
 import io
 from PIL import Image
 from litdata import StreamingDataset
-
-# --- surgical additions ---
-from urllib.parse import urlparse
-import boto3
-from botocore.config import Config
 # --- end additions ---
-
-_DEBUG_ONCE = {"done": False}
 
 ### Configure the training job
 config = {
@@ -45,15 +38,8 @@ config = {
     "color_jitter_hue": 0.1,
 }
 
-# Dataloader perf knobs (env-overridable)
-DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", "0"))
-PERSISTENT_WORKERS = DATALOADER_WORKERS > 0
-PREFETCH_FACTOR = int(os.getenv("PREFETCH_FACTOR", "2")) if DATALOADER_WORKERS > 0 else None
+### Prepare data loaders
 
-# LitData perf knob (env-overridable)
-MAX_PRE_DOWNLOAD = int(os.getenv("LITDATA_MAX_PRE_DOWNLOAD", "16"))
-
-# Define transforms for training data augmentation
 train_transform = transforms.Compose(
     [
         transforms.Resize(224),
@@ -80,11 +66,9 @@ val_test_transform = transforms.Compose(
     ]
 )
 
-# LitData Streaming from S3 (shards live in S3, cached locally)
+# --- surgical additions (LitData S3 config) ---
 S3_BUCKET = os.getenv("S3_BUCKET", "rb-litdata-food11")
 LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
-
-# IMPORTANT: safe default cache dir (avoids /mnt/local permission issues)
 LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", os.path.join(os.path.expanduser("~"), "litdata_cache"))
 os.makedirs(LITDATA_CACHE_DIR, exist_ok=True)
 
@@ -103,55 +87,23 @@ if not (S3_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
         "(and optionally AWS_DEFAULT_REGION)."
     )
 
-# --- surgical change: DO NOT pass addressing_style in storage_options (litdata/boto3 Session.client doesn't accept it) ---
 STORAGE_OPTIONS = {"endpoint_url": S3_ENDPOINT_URL}
-
-# Use botocore Config to force path-style addressing for RGW (Chameleon)
-BOTO_CFG = Config(signature_version="s3v4", s3={"addressing_style": "path"})
-
 SESSION_OPTIONS = {
     "aws_access_key_id": AWS_ACCESS_KEY_ID,
     "aws_secret_access_key": AWS_SECRET_ACCESS_KEY,
     "region_name": AWS_DEFAULT_REGION,
-    "config": BOTO_CFG,  # <-- supported way
 }
-# --- end change ---
 
-
-# --- surgical additions ---
-def _s3_prefix_exists(url: str, max_keys: int = 1) -> None:
-    u = urlparse(url)
-    bucket = u.netloc
-    prefix = u.path.lstrip("/") + "/"
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=S3_ENDPOINT_URL,
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        region_name=AWS_DEFAULT_REGION,
-        config=BOTO_CFG,  # <-- keep consistent with session_options
-    )
-    resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=max_keys)
-    if "Contents" not in resp or not resp["Contents"]:
-        raise RuntimeError(f"No objects found under s3://{bucket}/{prefix} (check bucket/prefix/creds).")
-    print(f"[litdata] S3 OK: s3://{bucket}/{prefix}")
-
-
-_s3_prefix_exists(TRAIN_URL)
-_s3_prefix_exists(VAL_URL)
-_s3_prefix_exists(TEST_URL)
+DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", "0"))
+PERSISTENT_WORKERS = DATALOADER_WORKERS > 0
+PREFETCH_FACTOR = int(os.getenv("PREFETCH_FACTOR", "2")) if DATALOADER_WORKERS > 0 else None
+MAX_PRE_DOWNLOAD = int(os.getenv("LITDATA_MAX_PRE_DOWNLOAD", "16"))
 # --- end additions ---
 
 
 def decode_litdata_sample(sample, transform):
     img_bytes = sample["image"]
     label = int(sample["label"])
-
-    # NOTE: with num_workers>0, each worker is a different process, so you'll see this once per worker.
-    if not _DEBUG_ONCE["done"]:
-        print(f"[litdata] first_sample: keys={list(sample.keys())} label={label} bytes={len(img_bytes)}")
-        _DEBUG_ONCE["done"] = True
-
     image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
     if transform:
         image = transform(image)
@@ -173,8 +125,6 @@ class LitDataFood11(torch.utils.data.Dataset):
             session_options=SESSION_OPTIONS,
         )
 
-        print(f"[litdata] split={split_name} input={input_url} cache_dir={cache_dir} shuffle={shuffle}")
-
     def __len__(self):
         return len(self.ds)
 
@@ -189,7 +139,7 @@ test_dataset = LitDataFood11(TEST_URL, "evaluation", val_test_transform, shuffle
 train_loader = DataLoader(
     train_dataset,
     batch_size=config["batch_size"],
-    shuffle=False,  # shuffle is handled by StreamingDataset when shuffle=True
+    shuffle=False,
     num_workers=DATALOADER_WORKERS,
     pin_memory=True,
     persistent_workers=PERSISTENT_WORKERS,
@@ -220,10 +170,7 @@ class LightningFood11Model(L.LightningModule):
         super().__init__()
         self.model = models.mobilenet_v2(weights="MobileNet_V2_Weights.DEFAULT")
         num_ftrs = self.model.last_channel
-        self.model.classifier = nn.Sequential(
-            nn.Dropout(config["dropout_probability"]),
-            nn.Linear(num_ftrs, 11),
-        )
+        self.model.classifier = nn.Sequential(nn.Dropout(config["dropout_probability"]), nn.Linear(num_ftrs, 11))
         self.criterion = nn.CrossEntropyLoss()
 
     @property
@@ -289,7 +236,7 @@ lightning_food11_model = LightningFood11Model()
 
 trainer = Trainer(
     max_epochs=config["total_epochs"],
-    accelerator="auto",
+    accelerator="gpu",
     devices="auto",
     num_sanity_val_steps=0,
     callbacks=[checkpoint_callback, early_stopping_callback, backbone_finetuning_callback],
