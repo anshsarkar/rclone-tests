@@ -1,259 +1,175 @@
-import numpy as np
 import os
-import subprocess
-
+import io
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from litdata.streaming import StreamingDataLoader
-from torchvision import models, transforms
-
-### New imports for Lightning
 import lightning as L
+
+from PIL import Image
+from torchvision import models, transforms
 from lightning import Trainer
-from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, BackboneFinetuning
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+from litdata import StreamingDataset
+from litdata.streaming import StreamingDataLoader
+
 torch.set_float32_matmul_precision("medium")
 
-# --- surgical additions (LitData streaming from S3) ---
-import io
-from PIL import Image
-from litdata import StreamingDataset
-# --- end additions ---
-
-### Configure the training job
 config = {
-    "initial_epochs": 5,
-    "total_epochs": 20,
-    "patience": 5,
-    "batch_size":int(os.getenv("BATCH_SIZE", "32")),
+    "epochs": 20,
+    "batch_size": int(os.getenv("BATCH_SIZE", "32")),
     "lr": 1e-4,
-    "fine_tune_lr": 1e-6,
-    "model_architecture": "MobileNetV2",
-    "dropout_probability": 0.5,
-    "random_horizontal_flip": 0.5,
-    "random_rotation": 15,
-    "color_jitter_brightness": 0.2,
-    "color_jitter_contrast": 0.2,
-    "color_jitter_saturation": 0.2,
-    "color_jitter_hue": 0.1,
+    "dropout": 0.5,
 }
 
-### Prepare data loaders
+train_transform = transforms.Compose([
+    transforms.Resize(224),
+    transforms.CenterCrop(224),
+    transforms.RandomHorizontalFlip(0.5),
+    transforms.RandomRotation(15),
+    transforms.ColorJitter(0.2, 0.2, 0.2, 0.1),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406],
+                         [0.229, 0.224, 0.225]),
+])
 
-train_transform = transforms.Compose(
-    [
-        transforms.Resize(224),
-        transforms.CenterCrop(224),
-        transforms.RandomHorizontalFlip(p=config["random_horizontal_flip"]),
-        transforms.RandomRotation(config["random_rotation"]),
-        transforms.ColorJitter(
-            brightness=config["color_jitter_brightness"],
-            contrast=config["color_jitter_contrast"],
-            saturation=config["color_jitter_saturation"],
-            hue=config["color_jitter_hue"],
-        ),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
-)
+eval_transform = transforms.Compose([
+    transforms.Resize(224),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406],
+                         [0.229, 0.224, 0.225]),
+])
 
-val_test_transform = transforms.Compose(
-    [
-        transforms.Resize(224),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
-)
-
-# --- surgical additions (LitData S3 config) ---
 S3_BUCKET = os.getenv("S3_BUCKET", "rb-litdata-food11")
-LITDATA_PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
-LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", os.path.join(os.path.expanduser("~"), "litdata_cache"))
-os.makedirs(LITDATA_CACHE_DIR, exist_ok=True)
+PREFIX = os.getenv("LITDATA_PREFIX", "litdata_food11")
+CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", "/tmp/litdata_cache")
 
-TRAIN_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/training"
-VAL_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/validation"
-TEST_URL = f"s3://{S3_BUCKET}/{LITDATA_PREFIX}/evaluation"
+TRAIN_URL = f"s3://{S3_BUCKET}/{PREFIX}/training"
+VAL_URL   = f"s3://{S3_BUCKET}/{PREFIX}/validation"
+TEST_URL  = f"s3://{S3_BUCKET}/{PREFIX}/evaluation"
 
-S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
-AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
-AWS_DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
-
-LITDATA_CACHE_DIR = os.getenv("LITDATA_CACHE_DIR", "/tmp/litdata_cache")
-
-if not (S3_ENDPOINT_URL and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY):
-    raise RuntimeError(
-        "Missing S3 env vars. Set: S3_ENDPOINT_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY "
-        "(and optionally AWS_DEFAULT_REGION)."
-    )
-
-STORAGE_OPTIONS = {"endpoint_url": S3_ENDPOINT_URL}
+STORAGE_OPTIONS = {"endpoint_url": os.environ["S3_ENDPOINT_URL"]}
 SESSION_OPTIONS = {
-    "aws_access_key_id": AWS_ACCESS_KEY_ID,
-    "aws_secret_access_key": AWS_SECRET_ACCESS_KEY,
-    "region_name": AWS_DEFAULT_REGION,
+    "aws_access_key_id": os.environ["AWS_ACCESS_KEY_ID"],
+    "aws_secret_access_key": os.environ["AWS_SECRET_ACCESS_KEY"],
+    "region_name": os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
 }
 
-DATALOADER_WORKERS = int(os.getenv("DATALOADER_WORKERS", "0"))
-PERSISTENT_WORKERS = DATALOADER_WORKERS > 0
-PREFETCH_FACTOR = int(os.getenv("PREFETCH_FACTOR", "2")) if DATALOADER_WORKERS > 0 else None
-MAX_PRE_DOWNLOAD = int(os.getenv("LITDATA_MAX_PRE_DOWNLOAD", "16"))
-# --- end additions ---
+NUM_WORKERS = int(os.getenv("DATALOADER_WORKERS", "8"))
+PREFETCH = int(os.getenv("PREFETCH_FACTOR", "4"))
+MAX_PRE_DOWNLOAD = int(os.getenv("LITDATA_MAX_PRE_DOWNLOAD", "4096"))
 
+def decode(sample, transform):
+    img = Image.open(io.BytesIO(sample["image"])).convert("RGB")
+    return transform(img), int(sample["label"])
 
-def decode_litdata_sample(sample, transform):
-    img_bytes = sample["image"]
-    label = int(sample["label"])
-    image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-    if transform:
-        image = transform(image)
-    return image, label
+def collate_fn(transform):
+    def _fn(batch):
+        xs, ys = zip(*(decode(s, transform) for s in batch))
+        return torch.stack(xs), torch.tensor(ys)
+    return _fn
 
-def make_collate(transform):
-    def _collate(batch):
-        xs, ys = zip(*(decode_litdata_sample(s, transform) for s in batch))
-        return torch.stack(xs, 0), torch.tensor(ys, dtype=torch.long)
-    return _collate
-
-
-
-train_dataset = StreamingDataset(
-    input_dir=TRAIN_URL,
-    cache_dir=LITDATA_CACHE_DIR,
-    shuffle=True,
+train_ds = StreamingDataset(
+    TRAIN_URL, CACHE_DIR, shuffle=True,
     max_pre_download=MAX_PRE_DOWNLOAD,
     storage_options=STORAGE_OPTIONS,
     session_options=SESSION_OPTIONS,
 )
 
-val_dataset = StreamingDataset(
-    input_dir=VAL_URL,
-    cache_dir=LITDATA_CACHE_DIR,
-    shuffle=False,
+val_ds = StreamingDataset(
+    VAL_URL, CACHE_DIR, shuffle=False,
     max_pre_download=MAX_PRE_DOWNLOAD,
     storage_options=STORAGE_OPTIONS,
     session_options=SESSION_OPTIONS,
 )
 
-test_dataset = StreamingDataset(
-    input_dir=TEST_URL,
-    cache_dir=LITDATA_CACHE_DIR,
-    shuffle=False,
+test_ds = StreamingDataset(
+    TEST_URL, CACHE_DIR, shuffle=False,
     max_pre_download=MAX_PRE_DOWNLOAD,
     storage_options=STORAGE_OPTIONS,
     session_options=SESSION_OPTIONS,
 )
-
-
 
 train_loader = StreamingDataLoader(
-    train_dataset,
+    train_ds,
     batch_size=config["batch_size"],
-    num_workers=DATALOADER_WORKERS,
+    num_workers=NUM_WORKERS,
+    prefetch_factor=PREFETCH,
     shuffle=True,
-    collate_fn=make_collate(train_transform),
-    **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
+    collate_fn=collate_fn(train_transform),
 )
 
 val_loader = StreamingDataLoader(
-    val_dataset,
+    val_ds,
     batch_size=config["batch_size"],
-    num_workers=DATALOADER_WORKERS,
+    num_workers=NUM_WORKERS,
+    prefetch_factor=PREFETCH,
     shuffle=False,
-    collate_fn=make_collate(val_test_transform),
-    **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
+    collate_fn=collate_fn(eval_transform),
 )
 
 test_loader = StreamingDataLoader(
-    test_dataset,
+    test_ds,
     batch_size=config["batch_size"],
-    num_workers=DATALOADER_WORKERS,
+    num_workers=NUM_WORKERS,
+    prefetch_factor=PREFETCH,
     shuffle=False,
-    collate_fn=make_collate(val_test_transform),
-    **({} if PREFETCH_FACTOR is None else {"prefetch_factor": PREFETCH_FACTOR}),
+    collate_fn=collate_fn(eval_transform),
 )
 
-
-
-
-class LightningFood11Model(L.LightningModule):
+class Food11Model(L.LightningModule):
     def __init__(self):
         super().__init__()
         self.model = models.mobilenet_v2(weights="MobileNet_V2_Weights.DEFAULT")
-        num_ftrs = self.model.last_channel
-        self.model.classifier = nn.Sequential(nn.Dropout(config["dropout_probability"]), nn.Linear(num_ftrs, 11))
-        self.criterion = nn.CrossEntropyLoss()
 
-    @property
-    def backbone(self):
-        return self.model.features
+        for p in self.model.features.parameters():
+            p.requires_grad = False
+
+        self.model.classifier = nn.Sequential(
+            nn.Dropout(config["dropout"]),
+            nn.Linear(self.model.last_channel, 11),
+        )
+
+        self.loss = nn.CrossEntropyLoss()
 
     def forward(self, x):
         return self.model(x)
 
-    def training_step(self, batch, batch_idx):
-        inputs, labels = batch
-        outputs = self(inputs)
-        loss = self.criterion(outputs, labels)
-        acc = (outputs.argmax(dim=1) == labels).float().mean()
-        self.log("train_loss", loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
-        self.log("train_accuracy", acc, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
-        return {"loss": loss, "train_accuracy": acc}
+    def step(self, batch):
+        x, y = batch
+        logits = self(x)
+        loss = self.loss(logits, y)
+        acc = (logits.argmax(1) == y).float().mean()
+        return loss, acc
 
-    def validation_step(self, batch, batch_idx):
-        inputs, labels = batch
-        outputs = self(inputs)
-        loss = self.criterion(outputs, labels)
-        acc = (outputs.argmax(dim=1) == labels).float().mean()
-        self.log("val_loss", loss, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
-        self.log("val_accuracy", acc, prog_bar=True, sync_dist=True, on_step=False, on_epoch=True)
-        return {"val_loss": loss, "val_accuracy": acc}
-
-    def test_step(self, batch, batch_idx):
-        inputs, labels = batch
-        outputs = self(inputs)
-        loss = self.criterion(outputs, labels)
-        acc = (outputs.argmax(dim=1) == labels).float().mean()
-        self.log("test_loss", loss)
-        self.log("test_accuracy", acc)
+    def training_step(self, batch, _):
+        loss, acc = self.step(batch)
+        self.log_dict({"train_loss": loss, "train_acc": acc}, prog_bar=True)
         return loss
 
+    def validation_step(self, batch, _):
+        loss, acc = self.step(batch)
+        self.log_dict({"val_loss": loss, "val_acc": acc}, prog_bar=True)
+
+    def test_step(self, batch, _):
+        loss, acc = self.step(batch)
+        self.log_dict({"test_loss": loss, "test_acc": acc})
+
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.model.classifier.parameters(), lr=config["lr"])
-        return optimizer
+        return optim.Adam(self.model.classifier.parameters(), lr=config["lr"])
 
-
-checkpoint_callback = ModelCheckpoint(
-    dirpath="checkpoints/",
-    filename="food11",
-    monitor="val_loss",
-    mode="min",
-    save_top_k=1,
-)
-
-early_stopping_callback = EarlyStopping(
-    monitor="val_loss",
-    patience=config["patience"],
-    mode="min",
-)
-
-backbone_finetuning_callback = BackboneFinetuning(
-    unfreeze_backbone_at_epoch=config["initial_epochs"],
-    backbone_initial_lr=config["fine_tune_lr"],
-    should_align=True,
-)
-
-lightning_food11_model = LightningFood11Model()
+model = Food11Model()
 
 trainer = Trainer(
-    max_epochs=config["total_epochs"],
     accelerator="gpu",
-    devices="auto",
+    devices=1,
+    max_epochs=config["epochs"],
+    callbacks=[
+        ModelCheckpoint(monitor="val_loss", mode="min"),
+        EarlyStopping(monitor="val_loss", patience=3),
+    ],
     num_sanity_val_steps=0,
-    callbacks=[checkpoint_callback, early_stopping_callback, backbone_finetuning_callback],
 )
 
-trainer.fit(lightning_food11_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
-trainer.test(lightning_food11_model, dataloaders=test_loader)
+trainer.fit(model, train_loader, val_loader)
+trainer.test(model, test_loader)
