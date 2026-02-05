@@ -157,143 +157,143 @@ services:
         echo "========================================="
 
   # STAGE 3B: SHARD & UPLOAD (Optimized for LitData)
-shard-data:
-    container_name: etl_shard_data_s3
-    image: python:3.11
-    shm_size: '10gb'
-    volumes:
-      - food11:/data
-      - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
-    environment:
-      - RCLONE_CONTAINER=${RCLONE_CONTAINER}
-      # Set default to 512MB (Ideal for S3 speed)
-      - LITDATA_CHUNK_SIZE=${LITDATA_CHUNK_SIZE:-512}
-    working_dir: /data
-    depends_on:
-      - transform-data 
-    command:
-      - bash
-      - -c
-      - |
-        set -e
-        
-        if [ -z "$$RCLONE_CONTAINER" ]; then
-          echo "ERROR: RCLONE_CONTAINER is not set"
-          exit 1
-        fi
-        
-        echo "Installing system dependencies..."
-        apt-get update && apt-get install -y curl
-        curl https://rclone.org/install.sh | bash
-
-        echo "Installing Python packages..."
-        pip install --no-cache-dir litdata 
-        
-        echo "Starting litdata sharding process..."
-        mkdir -p /data/litdata-shards
-        
-        # Create sharding script
-        cat > shard_food11.py << 'EOF'
-        import os
-        from pathlib import Path
-        import multiprocessing as mp
-        from litdata import optimize
-
-        CLASSES = [f"class_{i:02d}" for i in range(11)]
-        IMG_EXTS = {".jpg", ".jpeg", ".png"}
-        
-        # 1. READ SIZE IN MB
-        CHUNK_MB = int(os.getenv("LITDATA_CHUNK_SIZE", "512"))
-        # 2. CONVERT TO BYTES (Crucial Step!)
-        CHUNK_BYTES = CHUNK_MB * 1024 * 1024
-
-        def pack_image(sample_path: str):
-            label_name = Path(sample_path).parent.name
-            if label_name not in CLASSES:
-                raise ValueError(f"Unexpected class folder: {label_name} for {sample_path}")
-
-            label = CLASSES.index(label_name)
-            with open(sample_path, "rb") as f:
-                img_bytes = f.read()
-
-            return {"image": img_bytes, "label": label, "path": str(sample_path)}
-
-        def list_images(split_dir: str):
-            p = Path(split_dir)
-            files = [str(x) for x in p.rglob("*") if x.is_file() and x.suffix.lower() in IMG_EXTS]
-            files.sort()
-            return files
-
-        def main():
-            food11_local_dir = "/data/Food-11"
-            local_out_root = "/data/litdata-shards"
-            
-            print(f"--- CONFIG: Chunk Size = {CHUNK_MB} MB ({CHUNK_BYTES} bytes) ---")
-
-            for split in ["training", "validation", "evaluation"]:
-                split_dir = os.path.join(food11_local_dir, split)
-                out_dir = os.path.join(local_out_root, split)
-
-                inputs = list_images(split_dir)
-                print(f"[litdata] split={split} files={len(inputs)} -> local_out={out_dir}", flush=True)
-                if len(inputs) == 0:
-                    continue
-
-                optimize(
-                    inputs=inputs,
-                    output_dir=out_dir,
-                    fn=pack_image,
-                    # 3. USE chunk_bytes (Forces correct size)
-                    chunk_bytes=CHUNK_BYTES,
-                    num_workers=8
-                )
-        if __name__ == "__main__":
-            try:
-                mp.set_start_method("spawn", force=True)
-            except RuntimeError:
-                pass
-            main()
-        EOF
-        
-        # Run script
-        python shard_food11.py
-        
-        echo "Uploading sharded data to S3..."
-        echo "Target: rclone_s3:$$RCLONE_CONTAINER/optimized-dataset"
-        
-        rclone delete rclone_s3:$$RCLONE_CONTAINER/optimized-dataset --rmdirs || true
-        
-        rclone copy /data/litdata-shards rclone_s3:$$RCLONE_CONTAINER/optimized-dataset \
-          --progress \
-          --transfers=32 \
-          --checkers=16 \
-          --s3-upload-concurrency=4
-        
-        echo "========== UPLOAD COMPLETE =========="
-        echo ""
-        echo "LOCAL BIN COUNTS:"
-        for split in training validation evaluation; do
-          if [ -d "/data/litdata-shards/$$split" ]; then
-            bin_count=$$(find /data/litdata-shards/$$split -name "*.bin" | wc -l)
-            echo "  $$split: $$bin_count bins"
+  shard-data:
+      container_name: etl_shard_data_s3
+      image: python:3.11
+      shm_size: '10gb'
+      volumes:
+        - food11:/data
+        - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
+      environment:
+        - RCLONE_CONTAINER=${RCLONE_CONTAINER}
+        # Set default to 512MB (Ideal for S3 speed)
+        - LITDATA_CHUNK_SIZE=${LITDATA_CHUNK_SIZE:-512}
+      working_dir: /data
+      depends_on:
+        - transform-data 
+      command:
+        - bash
+        - -c
+        - |
+          set -e
+          
+          if [ -z "$$RCLONE_CONTAINER" ]; then
+            echo "ERROR: RCLONE_CONTAINER is not set"
+            exit 1
           fi
-        done
-        total_local_bins=$$(find /data/litdata-shards -name "*.bin" | wc -l)
-        echo "  TOTAL LOCAL BINS: $$total_local_bins"
-        echo ""
-        
-        echo "S3 BIN COUNTS:"
-        for split in training validation evaluation; do
-          s3_bin_count=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/optimized-dataset/$$split 2>/dev/null | grep "\.bin$$" | wc -l)
-          echo "  $$split: $$s3_bin_count bins"
-        done
-        total_s3_bins=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/optimized-dataset 2>/dev/null | grep "\.bin$$" | wc -l)
-        echo "  TOTAL S3 BINS: $$total_s3_bins"
-        echo ""
-        
-        # Verification check
-        if [ "$$total_local_bins" -eq "$$total_s3_bins" ]; then
-          echo "VERIFICATION PASSED: Local and S3 bin counts match!"
-        else
-          echo "VERIFICATION FAILED: Local ($$total_local_bins) and S3 ($$total_s3_bins) bin counts do not match!"
-        fi
+          
+          echo "Installing system dependencies..."
+          apt-get update && apt-get install -y curl
+          curl https://rclone.org/install.sh | bash
+
+          echo "Installing Python packages..."
+          pip install --no-cache-dir litdata 
+          
+          echo "Starting litdata sharding process..."
+          mkdir -p /data/litdata-shards
+          
+          # Create sharding script
+          cat > shard_food11.py << 'EOF'
+          import os
+          from pathlib import Path
+          import multiprocessing as mp
+          from litdata import optimize
+
+          CLASSES = [f"class_{i:02d}" for i in range(11)]
+          IMG_EXTS = {".jpg", ".jpeg", ".png"}
+          
+          # 1. READ SIZE IN MB
+          CHUNK_MB = int(os.getenv("LITDATA_CHUNK_SIZE", "512"))
+          # 2. CONVERT TO BYTES (Crucial Step!)
+          CHUNK_BYTES = CHUNK_MB * 1024 * 1024
+
+          def pack_image(sample_path: str):
+              label_name = Path(sample_path).parent.name
+              if label_name not in CLASSES:
+                  raise ValueError(f"Unexpected class folder: {label_name} for {sample_path}")
+
+              label = CLASSES.index(label_name)
+              with open(sample_path, "rb") as f:
+                  img_bytes = f.read()
+
+              return {"image": img_bytes, "label": label, "path": str(sample_path)}
+
+          def list_images(split_dir: str):
+              p = Path(split_dir)
+              files = [str(x) for x in p.rglob("*") if x.is_file() and x.suffix.lower() in IMG_EXTS]
+              files.sort()
+              return files
+
+          def main():
+              food11_local_dir = "/data/Food-11"
+              local_out_root = "/data/litdata-shards"
+              
+              print(f"--- CONFIG: Chunk Size = {CHUNK_MB} MB ({CHUNK_BYTES} bytes) ---")
+
+              for split in ["training", "validation", "evaluation"]:
+                  split_dir = os.path.join(food11_local_dir, split)
+                  out_dir = os.path.join(local_out_root, split)
+
+                  inputs = list_images(split_dir)
+                  print(f"[litdata] split={split} files={len(inputs)} -> local_out={out_dir}", flush=True)
+                  if len(inputs) == 0:
+                      continue
+
+                  optimize(
+                      inputs=inputs,
+                      output_dir=out_dir,
+                      fn=pack_image,
+                      # 3. USE chunk_bytes (Forces correct size)
+                      chunk_bytes=CHUNK_BYTES,
+                      num_workers=8
+                  )
+          if __name__ == "__main__":
+              try:
+                  mp.set_start_method("spawn", force=True)
+              except RuntimeError:
+                  pass
+              main()
+          EOF
+          
+          # Run script
+          python shard_food11.py
+          
+          echo "Uploading sharded data to S3..."
+          echo "Target: rclone_s3:$$RCLONE_CONTAINER/optimized-dataset"
+          
+          rclone delete rclone_s3:$$RCLONE_CONTAINER/optimized-dataset --rmdirs || true
+          
+          rclone copy /data/litdata-shards rclone_s3:$$RCLONE_CONTAINER/optimized-dataset \
+            --progress \
+            --transfers=32 \
+            --checkers=16 \
+            --s3-upload-concurrency=4
+          
+          echo "========== UPLOAD COMPLETE =========="
+          echo ""
+          echo "LOCAL BIN COUNTS:"
+          for split in training validation evaluation; do
+            if [ -d "/data/litdata-shards/$$split" ]; then
+              bin_count=$$(find /data/litdata-shards/$$split -name "*.bin" | wc -l)
+              echo "  $$split: $$bin_count bins"
+            fi
+          done
+          total_local_bins=$$(find /data/litdata-shards -name "*.bin" | wc -l)
+          echo "  TOTAL LOCAL BINS: $$total_local_bins"
+          echo ""
+          
+          echo "S3 BIN COUNTS:"
+          for split in training validation evaluation; do
+            s3_bin_count=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/optimized-dataset/$$split 2>/dev/null | grep "\.bin$$" | wc -l)
+            echo "  $$split: $$s3_bin_count bins"
+          done
+          total_s3_bins=$$(rclone ls rclone_s3:$$RCLONE_CONTAINER/optimized-dataset 2>/dev/null | grep "\.bin$$" | wc -l)
+          echo "  TOTAL S3 BINS: $$total_s3_bins"
+          echo ""
+          
+          # Verification check
+          if [ "$$total_local_bins" -eq "$$total_s3_bins" ]; then
+            echo "VERIFICATION PASSED: Local and S3 bin counts match!"
+          else
+            echo "VERIFICATION FAILED: Local ($$total_local_bins) and S3 ($$total_s3_bins) bin counts do not match!"
+          fi
